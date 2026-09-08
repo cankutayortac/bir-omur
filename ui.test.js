@@ -11,6 +11,7 @@ const A = require('./avatar.js');
 
 const source = readFileSync(join(__dirname, 'game.js'), 'utf8');
 const KEY = 'birOmur.v3';
+const UI_KEY = 'birOmur.ui.v1';
 const statKeys = ['knowledge', 'strength', 'charisma', 'happiness', 'health', 'stress'];
 
 // This intentionally small DOM adapter exercises the real UI event handlers and
@@ -61,7 +62,7 @@ function app(saved, previousStorage) {
     return el;
   }
 
-  for (const id of ['app', 'dialog', 'dialogContent', 'toast', 'importFile', 'dialogTitle', 'dialogFeedback', 'statFeedback', 'mainContent']) nodes.set('#' + id, element(id));
+  for (const id of ['app', 'dialog', 'dialogContent', 'toast', 'importFile', 'dialogTitle', 'dialogFeedback', 'statFeedback', 'mainContent', 'activitySearch', 'activityResults']) nodes.set('#' + id, element(id));
   const dialogBody = element('dialogBody');
   function query(selector) {
     if (nodes.has(selector)) return nodes.get(selector);
@@ -103,10 +104,23 @@ function app(saved, previousStorage) {
     dialog() {return nodes.get('#dialog');},
     dialogBody() {return dialogBody;},
     saved() {return JSON.parse(storage.get(KEY));},
+    preferences() {return JSON.parse(storage.get(UI_KEY) || '{}');},
+    searchHtml() {return nodes.get('#activityResults').innerHTML;},
+    eventKey() {return nodes.get('#dialogContent').innerHTML.match(/data-event-key="([^"]*)"/)?.[1];},
     click(dataset) {
-      const button = element();button.dataset = dataset;
+      const button = element();button.dataset = {...dataset};
+      // Real DOM buttons carry their rendered event identity. Supply that identity
+      // for ordinary test clicks, but never replace an explicitly stale key.
+      if (dataset.do === 'choice' && dataset.eventKey === undefined) button.dataset.eventKey = nodes.get('#dialogContent').innerHTML.match(/data-event-key="([^"]*)"/)?.[1];
       for (const handler of listeners.get('click') || []) handler({target: button});
       assert.deepEqual(errors, [], 'click handler produces no caught errors');
+    },
+    input(value, id = 'activitySearch') {
+      const input = nodes.get('#' + id);
+      assert.ok(input, 'input fixture exists: ' + id);
+      input.value = value;
+      for (const handler of listeners.get('input') || []) handler({target: input});
+      assert.deepEqual(errors, [], 'input handler produces no caught errors');
     },
     async importSave(state) {
       const input = nodes.get('#importFile'), serialized = JSON.stringify(state);
@@ -428,4 +442,253 @@ test('Budget UI exposes the economy, family pool, side-income tax and debt princ
   for (const forecast of E.housingForecast(state)) assert.ok(markup.includes(forecast.label));
   assert.ok(!/NaN|undefined/.test(markup));
   assertStats(markup, state);
+});
+
+const inspectedIds = markup => [...markup.matchAll(/data-do="inspectActivity" data-id="([^"]+)"/g)].map(match => match[1]);
+function atAge(age) {
+  const state = fresh(); state.age = age; state.notices = []; state.pending = null;
+  state.year.energy = state.year.maxEnergy = E.maxEnergy(state);
+  return state;
+}
+function preferencesStorage(preferences) {return new Map([[UI_KEY, JSON.stringify(preferences)]]);}
+
+test('Life timeline groups years newest-first while keeping same-year entries chronological and older years collapsed', () => {
+  const state = atAge(5);
+  state.log = [
+    {age: 0, kind: 'milestone', title: 'TIMELINE_BIRTH', text: 'İlk sayfa.'},
+    {age: 3, kind: 'life', title: 'TIMELINE_3A', text: 'Eski bir an.'},
+    {age: 4, kind: 'activity', title: 'TIMELINE_4A', text: 'Önce bu oldu.'},
+    {age: 4, kind: 'decision', title: 'TIMELINE_4B', text: 'Sonra bu oldu.'},
+    {age: 5, kind: 'year', title: 'TIMELINE_5A', text: 'Yıl başladı.'},
+    {age: 5, kind: 'activity', title: 'TIMELINE_5B', text: 'Bir etkinlik yaptın.'},
+    {age: 5, kind: 'milestone', title: 'TIMELINE_5C', text: 'Bir hedef tamamlandı.'}
+  ];
+  const ui = app(state), before = ui.storage.get(KEY), markup = ui.html();
+  assert.deepEqual([...markup.matchAll(/class="timeline-group[^"]*" data-age="(\d+)"/g)].map(m => Number(m[1])), [5, 4, 3, 0]);
+  const older = markup.match(/<details\b[^>]*class="timeline-older"[^>]*>/);
+  assert.ok(older); assert.ok(!/\bopen(?:\s|>|=)/.test(older[0]), 'previous years start in a closed native disclosure');
+  for (const age of [4, 5]) {
+    const group = markup.match(new RegExp('<section class="timeline-group[^"\\n]*" data-age="' + age + '">([\\s\\S]*?)<\\/section>'));
+    assert.ok(group); assert.ok(group[1].indexOf('TIMELINE_' + age + 'A') < group[1].indexOf('TIMELINE_' + age + 'B'));
+  }
+  ui.click({journalFilter: 'milestones'});
+  assert.ok(ui.html().includes('TIMELINE_5C')); assert.ok(ui.html().includes('TIMELINE_BIRTH'));
+  assert.ok(!ui.html().includes('TIMELINE_5B'));
+  assert.equal(ui.storage.get(KEY), before, 'changing the timeline view does not alter the life');
+});
+
+test('Default activity view contains age-appropriate actions, locked reasons and an explicit future-actions toggle', () => {
+  const state = atAge(12), ui = app(state);
+  ui.click({tab: 'activities'});
+  const before = ui.storage.get(KEY);
+  const expected = D.actions.filter(a => state.age >= (a.minAge || 0) && state.age <= (a.maxAge ?? 120)).map(a => a.id);
+  assert.deepEqual(inspectedIds(ui.html()), expected);
+  assert.ok(ui.html().includes(E.actionReason(state, 'read')), 'gear requirement is discoverable without attempting the action');
+  assert.ok(ui.html().includes('data-do="toggleFuture" aria-expanded="false"'));
+  ui.click({do: 'toggleFuture'});
+  for (const action of D.actions.filter(a => state.age < (a.minAge || 0))) assert.ok(inspectedIds(ui.html()).includes(action.id), 'future unlock can be inspected: ' + action.id);
+  assert.ok(ui.html().includes('data-do="toggleFuture" aria-expanded="true"'));
+  ui.click({do: 'toggleFuture'});
+  assert.deepEqual(inspectedIds(ui.html()), expected);
+  assert.equal(ui.storage.get(KEY), before);
+});
+
+test('Ready filter and local activity search spend no game resources or change the save', () => {
+  const state = atAge(12), ui = app(state);
+  ui.click({tab: 'activities'});
+  const before = ui.storage.get(KEY);
+  ui.click({activityFilter: 'ready'});
+  const ready = D.actions.filter(a => !E.actionReason(state, a)).map(a => a.id);
+  assert.ok(ready.length > 0); assert.deepEqual(inspectedIds(ui.html()), ready);
+  ui.click({activityFilter: 'age'});
+  const query = 'kütüphane';
+  ui.input(query);
+  const expected = D.actions.filter(a => (a.name + ' ' + a.description).toLocaleLowerCase('tr-TR').includes(query)).map(a => a.id);
+  assert.ok(expected.length > 0); assert.deepEqual(inspectedIds(ui.searchHtml()), expected);
+  assert.ok(ui.searchHtml().includes('role="status" aria-live="polite"'));
+  ui.input('zzzzzzzz-olmayan-aktivite');
+  assert.deepEqual(inspectedIds(ui.searchHtml()), []); assert.ok(ui.searchHtml().includes('Bu aramada bir aktivite bulamadık.'));
+  ui.input('<img src=x onerror=alert(1)>');
+  assert.ok(!ui.searchHtml().includes('<img src=x')); assert.ok(ui.searchHtml().includes('&lt;img'));
+  assert.equal(ui.storage.get(KEY), before, 'search/filter does not spend money, energy, RNG or stat progress');
+});
+
+test('Favorite activities persist only in UI preferences and can be removed without mutating the life', () => {
+  const state = atAge(12), ui = app(state), before = ui.storage.get(KEY);
+  ui.click({tab: 'activities'}); ui.click({do: 'toggleFavorite', id: 'read'}); ui.click({do: 'toggleFavorite', id: 'rest'});
+  assert.deepEqual(ui.preferences(), {favorites: ['read', 'rest'], confirmAge: false});
+  assert.equal(ui.storage.get(KEY), before);
+  ui.click({activityFilter: 'favorites'});
+  assert.deepEqual(new Set(inspectedIds(ui.html())), new Set(['read', 'rest']));
+  assert.ok(ui.html().includes('aria-pressed="true"'));
+  const reloaded = app(null, ui.storage);
+  reloaded.click({tab: 'activities'}); reloaded.click({activityFilter: 'favorites'});
+  assert.deepEqual(new Set(inspectedIds(reloaded.html())), new Set(['read', 'rest']));
+  reloaded.click({do: 'toggleFavorite', id: 'read'});
+  assert.deepEqual(reloaded.preferences().favorites, ['rest']); assert.deepEqual(inspectedIds(reloaded.html()), ['rest']);
+  const preferencesBeforeInvalid = reloaded.storage.get(UI_KEY);
+  reloaded.click({do: 'toggleFavorite', id: 'missing-action'});
+  assert.equal(reloaded.storage.get(UI_KEY), preferencesBeforeInvalid);
+  assert.equal(reloaded.storage.get(KEY), before);
+});
+
+test('Inspecting an activity is read-only and its explicit confirmation applies the action with current stats visible', () => {
+  const state = atAge(12), ui = app(state), before = ui.storage.get(KEY);
+  ui.click({tab: 'activities'}); ui.click({do: 'inspectActivity', id: 'rest'});
+  assert.equal(ui.dialog().dataset.kind, 'activity'); assertStats(ui.dialogHtml(), state);
+  assert.ok(ui.dialogHtml().includes('data-do="activity" data-id="rest"'));
+  assert.ok(ui.dialogHtml().includes('Şu anki kazanımın'));
+  assert.equal(ui.storage.get(KEY), before);
+  const expected = E.migrate(JSON.parse(JSON.stringify(state)));
+  assert.equal(E.act(expected, 'activity', {id: 'rest'}).ok, true);
+  ui.click({do: 'activity', id: 'rest'});
+  assert.equal(ui.saved().year.energy, expected.year.energy); assert.deepEqual(ui.saved().stats, expected.stats);
+  assertStats(ui.html(), expected);
+  ui.click({do: 'inspectActivity', id: 'read'});
+  assert.equal(ui.dialog().dataset.kind, 'activity');
+  assert.ok(/data-do="activity" data-id="read"\s+disabled/.test(ui.dialogHtml()));
+  const blocked = ui.storage.get(KEY);
+  ui.click({do: 'activity', id: 'read'});
+  assert.equal(ui.storage.get(KEY), blocked, 'even a stale blocked detail action cannot spend resources');
+});
+
+test('Optional unused-time confirmation exposes current stats, stays in this year on cancel and advances once on confirm', () => {
+  const state = fresh(), ui = app(state, preferencesStorage({favorites: [], confirmAge: true}));
+  const before = ui.storage.get(KEY);
+  ui.click({do: 'age'});
+  assert.equal(ui.dialog().dataset.kind, 'age-confirm'); assert.equal(ui.dialog().open, true);
+  assertStats(ui.dialogHtml(), state); assert.ok(ui.dialogHtml().includes('data-do="confirmAge"'));
+  assert.ok(ui.dialogHtml().includes(state.year.energy + ' zaman'));
+  assert.equal(ui.storage.get(KEY), before);
+  ui.click({do: 'closeDialog'}); assert.equal(ui.dialog().open, false); assert.equal(ui.storage.get(KEY), before);
+  ui.click({do: 'age'}); ui.click({do: 'confirmAge'});
+  assert.equal(ui.saved().age, state.age + 1);
+  const advanced = ui.storage.get(KEY);
+  ui.click({do: 'confirmAge'});
+  assert.equal(ui.storage.get(KEY), advanced, 'stale double confirm cannot skip another year');
+});
+
+test('Unused-time reminder is off by default and settings persist its toggle outside the game save', () => {
+  const state = fresh(), ui = app(state), before = ui.storage.get(KEY);
+  ui.click({do: 'settings'});
+  assert.ok(/data-do="toggleAgeConfirm" role="switch" aria-checked="false"/.test(ui.dialogHtml()));
+  ui.click({do: 'toggleAgeConfirm'});
+  assert.equal(ui.preferences().confirmAge, true);
+  assert.ok(/data-do="toggleAgeConfirm" role="switch" aria-checked="true"/.test(ui.dialogHtml()));
+  assert.equal(ui.storage.get(KEY), before);
+  const reloaded = app(null, ui.storage);
+  reloaded.click({do: 'age'}); assert.equal(reloaded.dialog().dataset.kind, 'age-confirm');
+  reloaded.click({do: 'closeDialog'}); reloaded.click({do: 'settings'}); reloaded.click({do: 'toggleAgeConfirm'});
+  assert.equal(reloaded.preferences().confirmAge, false); assert.equal(reloaded.storage.get(KEY), before);
+  reloaded.click({do: 'closeDialog'}); reloaded.click({do: 'age'});
+  assert.equal(reloaded.saved().age, state.age + 1);
+  assert.notEqual(reloaded.dialog().dataset.kind, 'age-confirm');
+});
+
+test('An enabled unused-time reminder does not add a confirmation when no time remains', () => {
+  const state = fresh(); state.year.energy = 0;
+  const ui = app(state, preferencesStorage({favorites: [], confirmAge: true}));
+  ui.click({do: 'age'});
+  assert.equal(ui.saved().age, state.age + 1);
+  assert.notEqual(ui.dialog().dataset.kind, 'age-confirm');
+});
+
+test('The new mobile shell has five destinations, one primary age control and a reachable health screen', () => {
+  const state = fresh(), ui = app(state), markup = ui.html();
+  const mobile = markup.match(/<nav class="mobile-nav"[^>]*>([\s\S]*?)<\/nav>/);
+  assert.ok(mobile);
+  assert.deepEqual([...mobile[1].matchAll(/data-tab="([^"]+)"/g)].map(m => m[1]), ['life', 'activities', 'people', 'future', 'assets']);
+  assert.equal((markup.match(/class="age-button"/g) || []).length, 1);
+  assert.ok(markup.includes('data-tab="health" aria-label="Sağlık ve yaşam düzeni"'));
+  assert.ok(markup.includes('data-do="genetics"'));
+  assert.ok(markup.includes('aria-label="Zekâ"')); assert.ok(markup.includes('aria-label="Güzellik"'));
+  ui.click({tab: 'health'});
+  assert.ok(ui.html().includes('Önce kendine iyi bak.')); assertStats(ui.html(), state);
+});
+
+test('Future overview, education and jobs are separate segments without changing the game', () => {
+  const state = atAge(24), ui = app(state), before = ui.storage.get(KEY);
+  ui.click({tab: 'future'});
+  assert.ok(ui.html().includes('Eğitim yollarını keşfet'));
+  assert.ok(!ui.html().includes('data-do="enroll"')); assert.ok(!ui.html().includes('data-do="apply"'));
+  ui.click({futureView: 'education'});
+  assert.equal((ui.html().match(/data-do="enroll"/g) || []).length, D.courses.length);
+  assert.ok(!ui.html().includes('data-do="apply"')); assertStats(ui.html(), state);
+  ui.click({futureView: 'jobs'});
+  assert.equal((ui.html().match(/data-do="apply"/g) || []).length, D.careers.length);
+  assert.ok(!ui.html().includes('data-do="enroll"')); assertStats(ui.html(), state);
+  ui.click({futureView: 'overview'});
+  assert.equal(ui.storage.get(KEY), before);
+});
+
+test('Existing life data survives the new shell, navigation, search and favorite preferences intact', () => {
+  const state = atAge(30);
+  state.name = 'Kayıtlı hayat'; state.money = 45678; state.debt = 12345;
+  state.inventory = [{id: 'book', condition: 100}, {id: 'laptop', condition: 73}];
+  state.education.degree = 'software'; state.education.degrees = ['software'];
+  state.job = {id: 'developer', salary: 600000, performance: 61, years: 4, level: 2};
+  state.year.energy = state.year.maxEnergy = E.maxEnergy(state);
+  const ui = app(state), before = ui.storage.get(KEY);
+  for (const tab of ['people', 'future', 'assets', 'health', 'activities', 'life']) ui.click({tab});
+  ui.click({tab: 'activities'}); ui.input('kitap'); ui.click({do: 'toggleFavorite', id: 'read'});
+  assert.equal(ui.storage.get(KEY), before);
+  const reloaded = app(null, ui.storage);
+  assert.equal(reloaded.storage.get(KEY), before); assert.deepEqual(reloaded.saved(), state);
+  assertStats(reloaded.html(), state);
+});
+
+test('Character name opens the non-mutating family trait comparison with current stat bars', () => {
+  const state = fresh(), ui = app(state), before = ui.storage.get(KEY);
+  assert.equal(typeof E.genetics, 'function');
+  ui.click({do: 'genetics'});
+  assert.equal(ui.dialog().dataset.kind, 'genetics'); assert.equal(ui.dialog().open, true);
+  assert.ok(ui.dialogHtml().includes('aria-label="Aile özellikleri karşılaştırması"'));
+  assert.ok(ui.dialogHtml().includes('Sen · doğuştan')); assert.ok(ui.dialogHtml().includes('Sen · şimdi'));
+  assert.ok(ui.dialogHtml().includes('Zekâ')); assert.ok(ui.dialogHtml().includes('Güzellik'));
+  assert.ok(!/NaN|undefined/.test(ui.dialogHtml())); assertStats(ui.dialogHtml(), state);
+  assert.equal(ui.storage.get(KEY), before);
+});
+
+test('A stale activity confirmation cannot consume a second year-time unit after its detail dialog closes', () => {
+  const state = atAge(12), ui = app(state);
+  ui.click({tab: 'activities'}); ui.click({do: 'inspectActivity', id: 'rest'});
+  assert.equal(ui.dialog().dataset.kind, 'activity'); assert.equal(ui.dialog().dataset.activityId, 'rest');
+  ui.click({do: 'activity', id: 'rest'});
+  assert.equal(ui.saved().year.used.rest, 1);
+  assert.equal(ui.saved().year.energy, state.year.energy - 1);
+  const afterFirst = ui.storage.get(KEY);
+  ui.click({do: 'activity', id: 'rest'});
+  assert.equal(ui.storage.get(KEY), afterFirst, 'detached old confirmation is not a new decision to repeat the action');
+  ui.click({do: 'inspectActivity', id: 'read'});
+  ui.click({do: 'activity', id: 'rest'});
+  assert.equal(ui.storage.get(KEY), afterFirst, 'an open detail dialog for another action does not authorize rest');
+  ui.click({do: 'closeDialog'}); ui.click({do: 'inspectActivity', id: 'rest'}); ui.click({do: 'activity', id: 'rest'});
+  assert.equal(ui.saved().year.used.rest, 2, 'an intentional new inspection and confirmation can repeat an allowed action');
+});
+
+test('An old choice key cannot choose the same index in a newly queued NPC encounter', () => {
+  const state = atAge(12);
+  const npc = {id: 'ui-queued-acquaintance', name: 'Ece', role: 'acquaintance', contextRole: 'classmate', gender: 'female', age: 12, alive: true, health: 95, bond: 42, income: 0, job: 'Öğrenci', personality: 'Sıcakkanlı'};
+  state.npcs.push(npc); state.flags.npcCounter++;
+  state.pending = {id: 'group_project'};
+  state.encounters = [{id: 'relationship_meet_child', npcId: npc.id}];
+  const ui = app(state), firstKey = ui.eventKey();
+  assert.equal(firstKey, encodeURIComponent(state.age + ':group_project:'));
+  ui.click({do: 'choice', index: '0', eventKey: firstKey});
+  const afterFirst = ui.saved(), secondKey = ui.eventKey();
+  assert.equal(afterFirst.pending.id, 'relationship_meet_child');
+  assert.equal(afterFirst.npcs.find(n => n.id === npc.id).role, 'acquaintance');
+  assert.equal(secondKey, encodeURIComponent(state.age + ':relationship_meet_child:' + npc.id));
+  assert.notEqual(secondKey, firstKey); assertEvent(ui, afterFirst);
+  const untouched = ui.storage.get(KEY);
+  ui.click({do: 'choice', index: '0', eventKey: firstKey});
+  assert.equal(ui.storage.get(KEY), untouched, 'old event identity cannot apply to the new pending encounter');
+  assert.equal(ui.saved().npcs.find(n => n.id === npc.id).role, 'acquaintance');
+  assert.deepEqual(ui.saved().pending, afterFirst.pending); assertEvent(ui, afterFirst);
+  ui.click({do: 'closeDialog'});
+  ui.click({do: 'choice', index: '0', eventKey: secondKey});
+  assert.equal(ui.storage.get(KEY), untouched, 'even a matching key is not actionable while its popup is closed');
+  ui.click({do: 'showEvent'}); ui.click({do: 'choice', index: '0', eventKey: secondKey});
+  assert.equal(ui.saved().pending, null);
+  assert.equal(ui.saved().npcs.find(n => n.id === npc.id).role, 'friend', 'the actual encounter choice remains available');
 });

@@ -152,7 +152,8 @@
     const stats = s.stats || {}, needs = career.requires?.stats || {};
     const requirements = Object.entries(needs);
     const edge = requirements.length ? requirements.reduce((sum, [key, threshold]) => sum + Math.max(0, finite(stats[key]) - finite(threshold)), 0) / requirements.length : 0;
-    return clamp(.54 + finite(stats.charisma) / 600 + finite(stats.knowledge) / 900 + Math.min(.1, edge / 300) + phase(s).jobs + (career.entryLevel ? .1 : 0), .4, .94);
+    const communication = Math.round(1000 * Math.sqrt(clamp(s.progression?.tracks?.social?.xp, 0, 1200) / 1200)) / 10;
+    return clamp(.54 + communication / 600 + finite(stats.knowledge) / 900 + Math.min(.1, edge / 300) + phase(s).jobs + (career.entryLevel ? .1 : 0), .4, .94);
   }
 
   function forecasts(s, Data) {

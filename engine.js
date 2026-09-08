@@ -6,7 +6,8 @@
 })(typeof globalThis !== 'undefined' ? globalThis : this, function (Data, Progression, Economy, Relationships) {
   'use strict';
 
-  const STAT_NAMES = { knowledge: 'Bilgi', strength: 'Kuvvet', charisma: 'Karizma', happiness: 'Mutluluk', health: 'Sağlık', stress: 'Stres' };
+  // Saved stat keys stay stable; social skill is separate from appearance.
+  const STAT_NAMES = { knowledge: 'Zekâ', strength: 'Kuvvet', charisma: 'Güzellik', happiness: 'Mutluluk', health: 'Sağlık', stress: 'Stres' };
   const NAMES = { female: ['Defne', 'Elif', 'Ece', 'Selin', 'Duru', 'Zeynep', 'İpek', 'Ada', 'Aslı', 'Deniz', 'Lara', 'Mina'], male: ['Emre', 'Arda', 'Mert', 'Can', 'Bora', 'Eren', 'Kerem', 'Ozan', 'Ali', 'Deniz', 'Atlas', 'Yiğit'] };
   const PERSONALITIES = ['Sıcakkanlı', 'İçe dönük', 'Hırslı', 'Duyarlı', 'Maceracı', 'Disiplinli'];
   const PARENT_JOBS = [
@@ -50,6 +51,62 @@
     if (Number.isFinite(Number(value)) && value !== undefined && value !== '') return Number(value) >>> 0;
     if (value) return Array.from(String(value)).reduce((n, c) => (Math.imul(n, 31) + c.charCodeAt(0)) >>> 0, 2166136261);
     return (Date.now() ^ Math.floor(Math.random() * 4294967296)) >>> 0;
+  }
+  function traitRandom(s, id, key) {
+    // A separate hash stream keeps legacy migrations from consuming life RNG.
+    let hash = seedNumber(`${s.seed}:${id}:${key}`);
+    hash = Math.imul(hash ^ (hash >>> 16), 0x7feb352d);
+    hash = Math.imul(hash ^ (hash >>> 15), 0x846ca68b);
+    return ((hash ^ (hash >>> 16)) >>> 0) / 4294967296;
+  }
+  const traitRound = n => Math.round(clamp(n) * 10) / 10;
+  function npcTraits(s, npc) {
+    const old = npc.traits && typeof npc.traits === 'object' ? npc.traits : {};
+    npc.traits = Object.fromEntries(['intelligence', 'beauty'].map(key => [key,
+      old[key] !== null && old[key] !== undefined && Number.isFinite(Number(old[key])) ? traitRound(old[key]) :
+        traitRound(10 + 40 * traitRandom(s, npc.id, key + ':a') + 40 * traitRandom(s, npc.id, key + ':b'))]));
+    return npc.traits;
+  }
+  function inheritTraits(first, second, roll) {
+    return Object.fromEntries(['intelligence', 'beauty'].map(key => {
+      const share = .4 + roll() * .2;
+      const family = number(first?.[key], 50) * share + number(second?.[key], 50) * (1 - share);
+      return [key, traitRound(clamp(family + (roll() - roll()) * 14, 15, 75))];
+    }));
+  }
+  function geneticRecord(inherited, parentIds, source = 'birth') {
+    return { version: 1, inherited: { ...inherited }, parentIds: [...parentIds], source,
+      birth: source === 'birth' ? { knowledge: traitRound(inherited.intelligence), charisma: traitRound(inherited.beauty) } : null };
+  }
+  function childTraits(s, first, second, parentIds) {
+    const inherited = inheritTraits(first, second, () => random(s));
+    return { traits: inherited, genetics: geneticRecord(inherited, parentIds), parentIds: [...parentIds] };
+  }
+  function migrateGenetics(s, old) {
+    for (const npc of s.npcs) npcTraits(s, npc);
+    const mother = s.npcs.find(n => n.role === 'mother'), father = s.npcs.find(n => n.role === 'father');
+    let serial = 0;
+    const fallback = inheritTraits(mother?.traits, father?.traits, () => traitRandom(s, 'player', 'legacy:' + serial++));
+    const valid = old?.version === 1 && old.inherited && ['intelligence', 'beauty'].every(key => Number.isFinite(old.inherited[key]));
+    s.genetics = geneticRecord(valid ? Object.fromEntries(Object.entries(old.inherited).filter(([key]) => ['intelligence', 'beauty'].includes(key)).map(([key, value]) => [key, traitRound(value)])) : fallback,
+      [mother?.id, father?.id].filter(Boolean), valid && old.source === 'birth' ? 'birth' : 'legacy');
+    if (valid && old.birth && ['knowledge', 'charisma'].every(key => Number.isFinite(old.birth[key]))) s.genetics.birth = { knowledge: traitRound(old.birth.knowledge), charisma: traitRound(old.birth.charisma) };
+    for (const npc of s.npcs) {
+      if (!['sibling', 'child'].includes(npc.role)) continue;
+      const parentIds = npc.role === 'sibling' ? [mother?.id, father?.id].filter(Boolean) : ['player', npc.parentId].filter(Boolean);
+      const parents = parentIds.map(id => id === 'player' ? s.genetics.inherited : s.npcs.find(n => n.id === id)?.traits);
+      serial = 0;
+      const inherited = npc.genetics?.version === 1 && npc.genetics.inherited ? npcTraits(s, { ...npc, traits: npc.genetics.inherited }) : inheritTraits(parents[0], parents[1], () => traitRandom(s, npc.id, 'legacy-child:' + serial++));
+      const source = npc.genetics?.source === 'birth' ? 'birth' : 'legacy';
+      npc.genetics = geneticRecord(inherited, parentIds, source); npc.parentIds = parentIds; npc.traits = { ...inherited };
+    }
+  }
+  function genetics(s) {
+    const g = s.genetics;
+    return { inherited: { ...g.inherited }, birth: g.birth ? { ...g.birth } : null, source: g.source,
+      current: { intelligence: s.stats.knowledge, beauty: s.stats.charisma },
+      parents: s.npcs.filter(isParent).map(n => ({ id: n.id, name: n.name, role: n.role, ...n.traits })),
+      explanation: 'Bu, gerçek genetik bilimi değil; oyuna ait kurgusal bir aile benzerliği sistemidir. Aile özellikleri doğum puanlarını etkiler; üst sınır koymaz. Zekâ öğrenmeyle, güzellik bakım ve sağlıklı rutinlerle gelişir. İletişim ayrı bir beceridir.' };
   }
   function log(s, title, text, kind = 'life') {
     s.log.push({ age: s.age, title, text, kind });
@@ -109,6 +166,7 @@
       personality: pick(s, PERSONALITIES), bond: int(s, 35, 58), alive: true, health: int(s, 70, 99),
       job: profession.name, income: profession.income, sick: false, ...opts };
     s.npcs.push(n);
+    npcTraits(s,n);
     Relationships.initNpc(s,n);
     return n;
   }
@@ -132,10 +190,13 @@
     if (options.gender === 'random') s.gender = random(s) < .5 ? 'female' : 'male';
     s.city = pick(s, ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Eskişehir', 'Antalya', 'Samsun']);
     s.appearance.hair = s.gender === 'female' ? 'wave' : 'short';
-    s.stats = { knowledge: int(s, 7, 18), strength: int(s, 7, 18), charisma: int(s, 8, 20), happiness: int(s, 66, 88), health: int(s, 80, 97), stress: int(s, 0, 8) };
+    s.stats = { knowledge: 0, strength: int(s, 7, 18), charisma: 0, happiness: int(s, 66, 88), health: int(s, 80, 97), stress: int(s, 0, 8) };
     s.progression=Progression.create(s);Economy.create(s);
     makeNpc(s, 'mother', { gender: 'female', age: int(s, 21, 38), bond: int(s, 65, 95) });
     makeNpc(s, 'father', { gender: 'male', age: int(s, 23, 43), bond: int(s, 55, 92) });
+    const inherited = inheritTraits(s.npcs[0].traits, s.npcs[1].traits, () => random(s));
+    s.genetics = geneticRecord(inherited, [s.npcs[0].id, s.npcs[1].id]);
+    Object.assign(s.stats, s.genetics.birth);
     familyUpdate(s);
     s.family.generosity = int(s, 35, 90);
     s.family.birthStandard = s.family.standard;
@@ -165,9 +226,20 @@
   function budget(s) {return Economy.budget(s,Data);}
   function effectPreview(s,effects={},context={source:'event'}) {
     const preview={...effects};delete preview.stats;
+    if(effects.skillXP)preview.skillXP=Progression.experiencePreview(s,effects.skillXP);
     for(const key of Object.keys(STAT_NAMES)) {
       const delta=number(effects[key])+number(effects.stats?.[key]);
       if(delta)preview[key]=Math.round((clamp(s.stats[key]+(context.adjusted?delta:Progression.adjust(s,key,delta,context)))-s.stats[key])*10)/10;
+    }
+    // These are separate progress meters, not core stats. Mirror the engine's
+    // grade/school alias and job requirement before showing an exact reward.
+    if(effects.grade!==undefined||effects.school!==undefined){
+      const current=number(s.education?.grade),delta=number(effects.grade||effects.school);
+      preview.grade=clamp(current+delta)-current;delete preview.school;
+    }
+    if(effects.performance!==undefined){
+      const current=number(s.job?.performance);
+      preview.performance=s.job?clamp(current+number(effects.performance))-current:0;
     }
     if(effects.money&&!context.adjustedMoney)preview.money=effects.money>0?(effects.taxable?Economy.salary(s,effects.money):Economy.price(s,effects.money)):-Economy.price(s,-effects.money);
     return preview;
@@ -286,11 +358,13 @@
     if (chronic) log(s, 'Tedavi planı', 'Kronik rahatsızlığın kontrol altına alındı. Düzenli takip ve tedavi yine gerekli.', 'health');
   }
   function applyEffects(s, effects = {}, npcId, context = {}) {
+    const skillXP=effects.skillXP?Progression.experiencePreview(s,effects.skillXP):null;
     const changes=Object.fromEntries(Object.keys(STAT_NAMES).map(key=>{
       const delta=number(effects[key])+number(effects.stats?.[key]);
       return [key,context.adjusted?delta:Progression.adjust(s,key,delta,context)];
     }));
     for(const [key,delta] of Object.entries(changes))s.stats[key]=Math.round(clamp(s.stats[key]+delta)*10)/10;
+    if(skillXP)for(const entry of Progression.experience(s,skillXP,true))milestone(s,entry.id,entry.title,entry.text);
     if (effects.money > 0) earn(s, context.adjustedMoney?effects.money:(effects.taxable?Economy.salary(s,effects.money):Economy.price(s,effects.money)),false,(context.source==='activity'&&context.taxable!==false)||effects.taxable===true);
     if (effects.money < 0) charge(s, context.adjustedMoney?-effects.money:Economy.price(s,-effects.money), true);
     if (effects.debt) s.debt = cash(s.debt + Math.sign(effects.debt)*Economy.price(s,Math.abs(effects.debt)));
@@ -383,8 +457,8 @@
     if (reason) return { ok: false, message: reason };
     s.year.energy--; s.year.social[n.id] = (s.year.social[n.id] || 0) + 1; s.year.used['social:' + n.id + ':' + interaction] = 1;
     let message = '', title = 'Bir ilişkiye zaman ayırdın',aidPaid=0;
-    if (interaction === 'talk') { const gain = int(s, 3, 8) + Math.floor(s.stats.charisma / 25); n.bond = clamp(n.bond + gain); applyEffects(s, { charisma: 1, happiness: 2, stress: -2 }); message = `${n.name} ile içten bir sohbet ettin. İlişkiniz ${gain} puan güçlendi.`; }
-    if (interaction === 'time') { n.bond = clamp(n.bond + int(s, 7, 12)); applyEffects(s, { happiness: 5, stress: -5 }); message = `${n.name} ile birlikte güzel bir gün geçirdin.`; }
+    if (interaction === 'talk') { const gain = int(s, 3, 8) + Math.floor(Progression.skillScore(s,'social') / 25); n.bond = clamp(n.bond + gain); applyEffects(s, { skillXP: { social: 3 }, happiness: 2, stress: -2 }); message = `${n.name} ile içten bir sohbet ettin. İlişkiniz ${gain} puan güçlendi; iletişim deneyimi kazandın.`; }
+    if (interaction === 'time') { n.bond = clamp(n.bond + int(s, 7, 12)); applyEffects(s, { skillXP: { social: 2 }, happiness: 5, stress: -5 }); message = `${n.name} ile birlikte güzel bir gün geçirdin; birbirinizi dinlemeye zaman ayırdın.`; }
     if (interaction === 'gift') { charge(s, Economy.price(s,s.age < 18 ? 250 : 1500)); n.bond = clamp(n.bond + int(s, 8, 13)); message = `${n.name} hediyeni görünce mutlu oldu.`; }
     if (interaction === 'apologize') { applyEffects(s, { stress: -3 }); message = `${n.name} ile arandaki kırgınlığı konuşup özür diledin.`; }
     if (interaction === 'argue') { n.bond = clamp(n.bond - int(s, 10, 20)); applyEffects(s, { happiness: -5, stress: 7 }); message = `${n.name} ile sert bir tartışma yaşadın.`; }
@@ -395,13 +469,13 @@
     }
     if (interaction === 'date') {
       charge(s, Economy.price(s,1800));
-      if (random(s) < Math.min(.90, .20 + n.bond / 220 + (n.trust||0)/500 + s.stats.charisma / 600)) {
+      if (random(s) < Math.min(.90, .20 + n.bond / 220 + (n.trust||0)/500 + Progression.skillScore(s,'social') / 900 + s.stats.charisma / 1800)) {
         const encounter=Relationships.romanticEvent(s,n);if(encounter)s.encounters.push(encounter);
         message = `${n.name} de senden hoşlanıyor. Kalp hızlandı; ilişkinin adını ise bir sonraki seçimde sen koyacaksın.`;
       } else { n.bond = clamp(n.bond - 5); applyEffects(s, { happiness: -4 }); message = `${n.name} seni tanımaktan memnun ama şu an aynı duyguları paylaşmıyor.`; }
     }
     if (interaction === 'marry') { charge(s, Economy.price(s,48000)); n.role = 'spouse'; n.marriedSince = s.age; n.bond = clamp(n.bond + 8); applyEffects(s, { happiness: 12, stress: 3 }); message = `${n.name} ile evlendin. Artık hane gelirini ve çocuk giderlerini birlikte planlayacaksınız.`; milestone(s, 'married', 'İki hayat, bir yuva', message);queueNotice(s,'marriage','Evet dediniz; bütçe de şahit',message,'Varlıklar menüsünde ortak hane katkısını ve yeni yaşam planını incele.'); }
-    if (interaction === 'child') { charge(s, Economy.price(s,18000)); const child = makeNpc(s, 'child', { age: 0, bond: 95, health: 92, job: 'Bebek', income: 0, parentId: n.id }); s.flags.lastChild = s.age; applyEffects(s, { happiness: 12, stress: 8 }); message = `${child.name} aileye katıldı. Çocuğunun ihtiyaçları yıllık bütçene eklendi.`; milestone(s, 'parent', 'Yeni bir hayatın sorumluluğu', message);queueNotice(s,'child:'+child.id,'Evin yeni minik patronu',message,'İlişkilerde çocuğunu görebilir, Varlıklarda bakım giderlerini takip edebilirsin.'); }
+    if (interaction === 'child') { charge(s, Economy.price(s,18000)); const child = makeNpc(s, 'child', { age: 0, bond: 95, health: 92, job: 'Bebek', income: 0, parentId: n.id, ...childTraits(s,s.genetics.inherited,npcTraits(s,n),['player',n.id]) }); s.flags.lastChild = s.age; applyEffects(s, { happiness: 12, stress: 8 }); message = `${child.name} aileye katıldı. Çocuğunun ihtiyaçları yıllık bütçene eklendi.`; milestone(s, 'parent', 'Yeni bir hayatın sorumluluğu', message);queueNotice(s,'child:'+child.id,'Evin yeni minik patronu',message,'İlişkilerde çocuğunu görebilir, Varlıklarda bakım giderlerini takip edebilirsin.'); }
     if (interaction === 'breakup') { const married = n.role === 'spouse'; n.role = 'ex'; n.bond = clamp(n.bond - 35); if (married) charge(s, Economy.price(s,12000), true); applyEffects(s, { happiness: -10, stress: 9 }); message = `${n.name} ile ${married ? 'evliliğin' : 'ilişkin'} sona erdi.${married ? ' Ayrılık masrafları bütçene işlendi.' : ''}`; }
     const memory=Relationships.social(s,n,interaction,{message,aid:aidPaid});
     if(memory?.message)message+=(message?' ':'')+memory.message;
@@ -437,7 +511,7 @@
     }
     const mother=s.npcs.find(n=>n.role==='mother'&&n.alive),father=s.npcs.find(n=>n.role==='father'&&n.alive);
     if(s.age>=1&&s.age<=16&&mother&&father&&mother.age<=43&&s.npcs.filter(n=>n.role==='sibling').length<2&&s.age-(s.flags.lastSiblingAge??-5)>=3&&random(s)<.045){
-      const sibling=makeNpc(s,'sibling',{age:0,bond:60,health:93,job:'Bebek',income:0,parentId:mother.id});s.flags.lastSiblingAge=s.age;
+      const sibling=makeNpc(s,'sibling',{age:0,bond:60,health:93,job:'Bebek',income:0,parentId:mother.id,...childTraits(s,mother.traits,father.traits,[mother.id,father.id])});s.flags.lastSiblingAge=s.age;
       log(s,'Aileye yeni biri katıldı',`${sibling.name} doğdu. Artık bir kardeşin var.`, 'relationship');
       queueNotice(s,'sibling:'+sibling.id,'Tek kişilik saltanatına küçük bir ortak',`${sibling.name} aileye katıldı. Minik eller, kocaman bir ses kapasitesi.`, 'Kardeşin İlişkiler menüsünde. Aile bütçesi artık onun ihtiyaçlarını da karşılıyor; büyürken aranızdaki bağı sen şekillendireceksin.');
     }
@@ -474,7 +548,7 @@
   function annualEducation(s) {
     if (s.age === 6) { s.education.level = 'primary'; milestone(s, 'school', 'İlk okul çantan', 'İlkokula başladın. Notların, düzenli çalışman ve stresin gelecekteki eğitim kapılarını belirleyecek.'); }
     if (s.age === 11) { s.education.level = 'middle'; milestone(s, 'middle', 'Yeni bir okul dönemi', 'Ortaokula başladın. Arkadaşlıkların ve ilgi alanların değişiyor.'); }
-    if (s.age === 14) { s.education.level = 'high'; milestone(s, 'high', 'Lise yılları', 'Liseye başladın. Üniversite başvurularında okul başarın ve bilgi düzeyin birlikte değerlendirilecek.'); }
+    if (s.age === 14) { s.education.level = 'high'; milestone(s, 'high', 'Lise yılları', 'Liseye başladın. Üniversite başvurularında okul başarın, zekân ve düzenli çaban birlikte değerlendirilecek.'); }
     if (s.age >= 6 && s.age <= 18) {
       s.education.grade = clamp(s.education.grade + Math.round((s.stats.knowledge - 40) / 15) + int(s, -2, 2) - (s.stats.stress > 70 ? 3 : 0));
       applyEffects(s,{knowledge:2},undefined,{source:'education'});
@@ -489,7 +563,7 @@
       else s.education.yearsLeft--;
       if (s.education.yearsLeft <= 0) {
         s.education.degree = c.degree || c.id; s.education.degrees.push(s.education.degree); s.education.courseId = null; s.education.level = 'graduate';
-        applyEffects(s, c.effects || { knowledge: 5, charisma: 3 });
+        applyEffects(s, c.effects || { knowledge: 5, skillXP: { social: 6 } });
         milestone(s, 'degree:' + c.id, 'Emeklerinin karşılığı', `${c.name} programını tamamladın. Yeni meslekler için diploman hazır.`);
       }
     }
@@ -574,7 +648,7 @@
     let outcome = choice.outcome || 'Kararının etkileri hayatına işlendi.';
     if (choice.chance) {
       const ch = choice.chance;
-      const success = ch.stat ? s.stats[ch.stat] + int(s, -20, 20) >= (ch.target ?? 45) : random(s) < (ch.probability ?? .5);
+      const success = ch.skill ? Progression.skillScore(s,ch.skill) + int(s,-20,20) >= (ch.target ?? 45) : ch.stat ? s.stats[ch.stat] + int(s, -20, 20) >= (ch.target ?? 45) : random(s) < (ch.probability ?? .5);
       const result = success ? ch.success || choice.success : ch.failure || choice.failure;
       if (result) { applyEffects(s, result.effects || result, pending.npcId,{source:'event'}); if (result.text || result.outcome) outcome = result.text || result.outcome; }
     }
@@ -744,6 +818,8 @@
     s.family.generosity = clamp(s.family.generosity, 0, 100);
     s.npcs = s.npcs.filter(n => n && typeof n === 'object').map((n, i) => ({ ...n, id: String(n.id || 'restored-' + i), name: String(n.name || 'Tanıdık').slice(0, 40), age: Math.round(clamp(n.age, 0, 125)), bond: clamp(n.bond), health: clamp(n.health), income: cash(n.income), alive: n.alive !== false }));
     for(const npc of s.npcs)Relationships.migrateNpc(s,npc);
+    migrateGenetics(s,old.genetics);
+    if(!old.genetics)queueNotice(s,'family-traits','Ailenden bir iz, senden bir yol','Karizma puanın artık Güzellik, Bilgi puanın Zekâ olarak görünüyor. Mevcut puanların korundu; iletişim ayrı bir uzmanlık olarak gelişiyor.','Eski hayatının doğum puanları bilinmiyor. Yeni hayatlarda zekâ ve güzellik, anne ile babanın özellikleri ve rastgele farklılıklarla belirlenir. Aile izi ekranından karşılaştırabilirsin.');
     s.progression=Progression.migrate(s,old.progression);Economy.migrate(s,old.economy);
     s.inventory = s.inventory.filter(i => i && get('items', i.id)).map(i => ({ id: i.id, condition: clamp(i.condition) })).filter(i => i.condition > 0);
     s.conditions = s.conditions.filter(c => c && c.id).map(c => ({ ...c, severity: clamp(c.severity, 1, 5), since: number(c.since, s.age), managedUntil: number(c.managedUntil, -1) }));
@@ -762,5 +838,5 @@
     return s;
   }
 
-  return { newLife, migrate, act, actionReason, choiceReason, careerReason, courseReason, socialReason, buyReason, lifestyleReason, budget, stage, occupation, itemValue, costOf, requirements: requirementReason, maxEnergy,activityPreview,effectPreview,eventById:id=>get('events',id),price:Economy.price,salary:Economy.salary,progression:Progression.overview,relationship:Relationships.overview,economy:s=>Economy.summary(s,Data),housingForecast:s=>Economy.forecasts(s,Data),trainingEfficiency:Progression.efficiency };
+  return { newLife, migrate, act, actionReason, choiceReason, careerReason, courseReason, socialReason, buyReason, lifestyleReason, budget, stage, occupation, itemValue, costOf, requirements: requirementReason, maxEnergy,activityPreview,effectPreview,eventById:id=>get('events',id),price:Economy.price,salary:Economy.salary,progression:Progression.overview,relationship:Relationships.overview,economy:s=>Economy.summary(s,Data),housingForecast:s=>Economy.forecasts(s,Data),trainingEfficiency:Progression.efficiency, genetics, skillScore: Progression.skillScore };
 });

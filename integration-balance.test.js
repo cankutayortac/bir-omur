@@ -132,6 +132,7 @@ test('parent gifts and recurring allowance share one finite untaxed household su
 
 test('declined serious job applications consume time and stop after two attempts', () => {
   const s = fresh();
+  s.progression.tracks.social.xp = 40; // Both job applications satisfy their communication prerequisite.
   let seed = 0;
   for (; seed < 100000; seed++) {
     const first = (Math.imul(seed, 1664525) + 1013904223) >>> 0;

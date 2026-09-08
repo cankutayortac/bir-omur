@@ -27,7 +27,7 @@ function simulate(seed,focus) {
   for(let age=0;age<=50&&s.alive;age++) {
     resolve(s,focus);
     if(s.notices?.length)E.act(s,'ackNotice',{ids:s.notices.map(n=>n.id)});
-    for(const id of ['book','shoes','guitar','laptop'])if(s.money>3000&&!E.buyReason(s,id))E.act(s,'buy',{id});
+    for(const id of ['book','shoes','guitar','laptop','care_kit'])if(D.items.some(item=>item.id===id)&&s.money>3000&&!E.buyReason(s,id))E.act(s,'buy',{id});
     if(s.age>=18&&!s.job&&!s.education.courseId&&!E.careerReason(s,'cashier'))E.act(s,'apply',{id:'cashier'});
     for(let action=0;s.year.energy>0&&action<12;action++) {
       resolve(s,focus);

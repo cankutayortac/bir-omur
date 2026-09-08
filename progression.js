@@ -11,8 +11,8 @@
   const tracks = [
     { id: 'academic', name: 'Araştırma', icon: '🔬', stat: 'knowledge', description: 'Meraktan araştırmaya: oku, öğren ve somut projeler üret.' },
     { id: 'athletics', name: 'Spor', icon: '🏅', stat: 'strength', description: 'Kondisyonunu düzenli antrenman ve dayanıklılık hedefleriyle geliştir.' },
-    { id: 'creative', name: 'Yaratıcılık', icon: '🎨', stat: 'charisma', description: 'Bir eser oluştur, portföy biriktir ve çalışmalarını paylaş.' },
-    { id: 'social', name: 'İletişim', icon: '🤝', stat: 'charisma', description: 'İnsanlarla bağ kur; bir ekibi dinlemeyi ve yönetmeyi öğren.' }
+    { id: 'creative', name: 'Yaratıcılık', icon: '🎨', stat: 'knowledge', description: 'Bir eser oluştur, portföy biriktir ve çalışmalarını paylaş. Dış görünümünden bağımsız bir beceridir.' },
+    { id: 'social', name: 'İletişim', icon: '🤝', stat: null, description: 'İnsanlarla bağ kur; bir ekibi dinlemeyi ve yönetmeyi öğren. Güzellikten bağımsız gelişir.' }
   ];
   const finite = (value, fallback = 0) => Number.isFinite(Number(value)) ? Number(value) : fallback;
   const clamp = (value, min, max) => Math.max(min, Math.min(max, finite(value, min)));
@@ -42,6 +42,12 @@
       if (s.flags?.portfolio) setTier('academic', 1);
       if (s.flags?.musician) setTier('creative', 1);
       if (s.flags?.volunteer) setTier('social', 1);
+    }
+    // Existing work demonstrates communication experience when upgrading the
+    // old charisma-based rules. No appearance points are removed or converted.
+    if (s.genetics?.source === 'legacy') {
+      const socialTier = Data.careers.find(job => job.id === s.job?.id)?.requires?.skills?.social || 0;
+      progression.tracks.social.xp = Math.max(progression.tracks.social.xp, THRESHOLDS[socialTier] || 0);
     }
     // Migration must not replay all previous tier announcements on the next click.
     for (const track of tracks) {
@@ -140,6 +146,12 @@
     return gainXP(s, awards);
   }
 
+  function experiencePreview(s, awards = {}) {
+    return xpPreview(s, { id: 'life-experience', skillXP: awards }, { repeat: 0 });
+  }
+  function experience(s, awards, adjusted = false) { return gainXP(s, adjusted ? awards : experiencePreview(s, awards)); }
+  function skillScore(s, id) { return round(100 * Math.sqrt(clamp(s.progression?.tracks?.[id]?.xp, 0, THRESHOLDS.at(-1)) / THRESHOLDS.at(-1))); }
+
   function tierFor(s, id) { return tierFromXP(clamp(s.progression?.tracks?.[id]?.xp, 0, THRESHOLDS.at(-1))); }
   function overview(s) {
     return tracks.map(track => {
@@ -151,5 +163,5 @@
     });
   }
 
-  return { create, migrate, adjust, preview, activity, annual, overview, tierFor, tracks, thresholds: THRESHOLDS.slice(), tierNames: TIERS.slice(), efficiency };
+  return { create, migrate, adjust, preview, activity, annual, overview, tierFor, tracks, thresholds: THRESHOLDS.slice(), tierNames: TIERS.slice(), efficiency, experience, experiencePreview, skillScore };
 });

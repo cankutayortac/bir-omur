@@ -41,7 +41,7 @@ test('One age increment pays a complete annual salary, with annual tax and bills
   assert.equal(s.age,31);
 });
 test('Time and per-year limits prevent repeated free gains',()=>{
-  const s=fresh(10);const a=D.actions.find(x=>x.id==='library');assert.ok(E.act(s,'activity',{id:a.id}).ok);assert.ok(E.act(s,'activity',{id:a.id}).ok);
+  const s=fresh(10);const a=D.actions.find(x=>x.id==='library');assert.ok(E.act(s,'activity',{id:a.id}).ok);resolve(s);assert.ok(E.act(s,'activity',{id:a.id}).ok);resolve(s);
   const before=JSON.stringify(s);assert.equal(E.act(s,'activity',{id:a.id}).ok,false);assert.equal(JSON.stringify(s),before);
   s.year.energy=0;assert.equal(E.act(s,'activity',{id:'rest'}).ok,false);
 });

@@ -183,3 +183,15 @@ test('read helpers are immutable and defensive with damaged optional numeric fie
   assert.equal(JSON.stringify(s), saved);
   assert.equal(Economy.price(s, -100), 0);
 });
+
+test('generic hiring rewards communication experience, not appearance', () => {
+  const s = state({ progression: { tracks: { social: { xp: 0 } } } });
+  s.stats.charisma = 5;
+  const lowBeauty = Economy.jobChance(s, { requires: {} });
+  s.stats.charisma = 100;
+  assert.equal(Economy.jobChance(s, { requires: {} }), lowBeauty);
+  s.progression.tracks.social.xp = 330;
+  const experienced = Economy.jobChance(s, { requires: {} });
+  assert.ok(experienced > lowBeauty);
+  assert.ok(experienced < 1, 'experience is not a hiring guarantee');
+});
