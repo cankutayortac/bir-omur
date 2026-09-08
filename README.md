@@ -1,4 +1,4 @@
-# Bir Ömür · Hayat Elinde — 3.3
+# Bir Ömür · Hayat Elinde — 3.3.1
 
 Türkçe, karar odaklı yaşam simülatörü. Doğumdan itibaren aile koşullarının, okulun, ilişkilerin, sağlığın ve ekonomik kararların birlikte şekillendirdiği bir hayat.
 
@@ -35,10 +35,12 @@ Türkçe, karar odaklı yaşam simülatörü. Doğumdan itibaren aile koşullar�
 - Tüm menülerde kaydırırken görünür kalan durum barları; son eylemin puan değişimleri.
 - Yaş ilerleyince otomatik açılan olay penceresi; olay ve ilişki pencerelerinde sabit durum barları, bağımsız kaydırılan seçenekler.
 - Okul başlangıçları/mezuniyet, kardeş doğumu, yeni eğitim, ebeveynlik, sağlık ve uzmanlık değişimlerinde kayıtla korunan kısa rehber pencereleri.
-- Yeni özgün mavi/lacivert arayüz; yıllara ayrılmış hayat günlüğü, kapalı eski yıllar, tek sabit yaş düğmesi ve telefonda beş ana bölüm.
-- Aktivite arama, bu yaşta/yapılabilir/favori filtreleri; harcamadan önce gerçek kazanım ve maliyet önizlemesi. Eğitimler ve iş ilanları ayrı bölümlerde.
+- Sade kömür/lacivert arayüz; yıllara ayrılmış hayat günlüğü, kapalı eski yıllar, tek sabit yaş düğmesi ve telefonda beş ana bölüm.
+- Aktivite arama, bu yaşta/yapılabilir/favori filtreleri; kartta görünen gerçek kazanım, zaman ve maliyet. Normal aktiviteler tek dokunuşla yapılır; ⓘ düğmesi yalnızca isteğe bağlı bilgi gösterir. Eğitimler ve iş ilanları ayrı bölümlerde.
 
 Her yaş ilerletme bir tam yılı hesaplar. Eylemler bu yılın sınırlı zaman puanını kullanır. Olay çözülmeden zaman ilerletilemez; sayfayı yenilemek de kararı atlamaz. Sağlık ve ekonomi kuralları oyun için tasarlanmıştır.
+
+Aktivite harcaması fiyat endeksiyle ölçeklenen 5.000 ₺'yi bulduğunda veya en az endeksli 1.000 ₺ olup kullanılabilir birikimin %25'ine ulaştığında kısa bir onay istenir. Sıradan/ücretsiz aktivitelerde onay yoktur; gerçek bir karşılaşma ya da önemli gelişme olursa hikâye penceresi yine açılır. Kilitli karttaki koşul okunabilir; ⓘ ve favori düğmeleri kilitliyken de kullanılabilir.
 
 Olay penceresini kapatmak kararı iptal etmez. Menülerde durumunu inceledikten sonra **Olayı aç / Olaya dön** ile devam edebilirsin. Bekleyen olay, kayıt açıldığında tekrar görünür. Barların yanındaki +/− değerler son başarılı eylemin gerçek değişimini gösterir; streste azalma olumludur.
 

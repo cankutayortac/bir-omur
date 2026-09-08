@@ -62,7 +62,7 @@ function app(saved, previousStorage) {
     return el;
   }
 
-  for (const id of ['app', 'dialog', 'dialogContent', 'toast', 'importFile', 'dialogTitle', 'dialogFeedback', 'statFeedback', 'mainContent', 'activitySearch', 'activityResults']) nodes.set('#' + id, element(id));
+  for (const id of ['app', 'dialog', 'dialogContent', 'toast', 'importFile', 'dialogTitle', 'dialogFeedback', 'statFeedback', 'mainContent', 'activitySearch', 'activityResults', 'activityCategory']) nodes.set('#' + id, element(id));
   const dialogBody = element('dialogBody');
   function query(selector) {
     if (nodes.has(selector)) return nodes.get(selector);
@@ -97,6 +97,14 @@ function app(saved, previousStorage) {
   vm.runInNewContext(source, context, {filename: 'game.js', timeout: 2000});
   assert.deepEqual(errors, [], 'initial render produces no caught errors');
 
+  function renderedActionKey(id, action = 'activity') {
+    const surfaces = action === 'confirmActivity' ? [nodes.get('#dialogContent').innerHTML] : [nodes.get('#app').innerHTML, nodes.get('#activityResults').innerHTML];
+    const keys = surfaces.flatMap(markup => [...markup.matchAll(/<button\b[^>]*>/g)].filter(([tag]) => tag.includes('data-do="' + action + '"') && tag.includes('data-id="' + id + '"')).map(([tag]) => tag.match(/data-action-key="([^"]*)"/)?.[1])).filter(key => key !== undefined);
+    // Partial search redraws retain the full-render revision. A later full render
+    // replaces that search DOM; prefer its newer actually rendered key.
+    return keys.sort((a, b) => Number(b) - Number(a))[0];
+  }
+
   return {
     storage, nodes,
     html() {return nodes.get('#app').innerHTML;},
@@ -107,11 +115,13 @@ function app(saved, previousStorage) {
     preferences() {return JSON.parse(storage.get(UI_KEY) || '{}');},
     searchHtml() {return nodes.get('#activityResults').innerHTML;},
     eventKey() {return nodes.get('#dialogContent').innerHTML.match(/data-event-key="([^"]*)"/)?.[1];},
+    actionKey: renderedActionKey,
     click(dataset) {
       const button = element();button.dataset = {...dataset};
       // Real DOM buttons carry their rendered event identity. Supply that identity
       // for ordinary test clicks, but never replace an explicitly stale key.
       if (dataset.do === 'choice' && dataset.eventKey === undefined) button.dataset.eventKey = nodes.get('#dialogContent').innerHTML.match(/data-event-key="([^"]*)"/)?.[1];
+      if (['activity', 'confirmActivity'].includes(dataset.do) && dataset.actionKey === undefined) button.dataset.actionKey = renderedActionKey(dataset.id, dataset.do);
       for (const handler of listeners.get('click') || []) handler({target: button});
       assert.deepEqual(errors, [], 'click handler produces no caught errors');
     },
@@ -121,6 +131,13 @@ function app(saved, previousStorage) {
       input.value = value;
       for (const handler of listeners.get('input') || []) handler({target: input});
       assert.deepEqual(errors, [], 'input handler produces no caught errors');
+    },
+    select(value, id = 'activityCategory') {
+      const select = nodes.get('#' + id);
+      assert.ok(select, 'select fixture exists: ' + id);
+      select.value = value;
+      for (const handler of listeners.get('change') || []) handler({target: select});
+      assert.deepEqual(errors, [], 'select change handler produces no caught errors');
     },
     async importSave(state) {
       const input = nodes.get('#importFile'), serialized = JSON.stringify(state);
@@ -532,24 +549,22 @@ test('Favorite activities persist only in UI preferences and can be removed with
   assert.equal(reloaded.storage.get(KEY), before);
 });
 
-test('Inspecting an activity is read-only and its explicit confirmation applies the action with current stats visible', () => {
+test('Optional activity information is read-only and does not contain an execution button', () => {
   const state = atAge(12), ui = app(state), before = ui.storage.get(KEY);
   ui.click({tab: 'activities'}); ui.click({do: 'inspectActivity', id: 'rest'});
-  assert.equal(ui.dialog().dataset.kind, 'activity'); assertStats(ui.dialogHtml(), state);
-  assert.ok(ui.dialogHtml().includes('data-do="activity" data-id="rest"'));
-  assert.ok(ui.dialogHtml().includes('Şu anki kazanımın'));
+  assert.equal(ui.dialog().dataset.kind, 'activity-info'); assertStats(ui.dialogHtml(), state);
+  assert.ok(!ui.dialogHtml().includes('data-do="activity"'));
+  assert.ok(!ui.dialogHtml().includes('data-do="confirmActivity"'));
+  assert.ok(ui.dialogHtml().includes('Kazanım önizlemesi'));
   assert.equal(ui.storage.get(KEY), before);
-  const expected = E.migrate(JSON.parse(JSON.stringify(state)));
-  assert.equal(E.act(expected, 'activity', {id: 'rest'}).ok, true);
   ui.click({do: 'activity', id: 'rest'});
-  assert.equal(ui.saved().year.energy, expected.year.energy); assert.deepEqual(ui.saved().stats, expected.stats);
-  assertStats(ui.html(), expected);
+  assert.equal(ui.storage.get(KEY), before, 'background activity command is blocked while information is open');
+  ui.click({do: 'closeDialog'});
   ui.click({do: 'inspectActivity', id: 'read'});
-  assert.equal(ui.dialog().dataset.kind, 'activity');
-  assert.ok(/data-do="activity" data-id="read"\s+disabled/.test(ui.dialogHtml()));
-  const blocked = ui.storage.get(KEY);
+  assert.equal(ui.dialog().dataset.kind, 'activity-info');
+  assert.ok(ui.dialogHtml().includes(E.actionReason(state, 'read')));
   ui.click({do: 'activity', id: 'read'});
-  assert.equal(ui.storage.get(KEY), blocked, 'even a stale blocked detail action cannot spend resources');
+  assert.equal(ui.storage.get(KEY), before);
 });
 
 test('Optional unused-time confirmation exposes current stats, stays in this year on cancel and advances once on confirm', () => {
@@ -603,7 +618,7 @@ test('The new mobile shell has five destinations, one primary age control and a 
   assert.ok(markup.includes('data-do="genetics"'));
   assert.ok(markup.includes('aria-label="Zekâ"')); assert.ok(markup.includes('aria-label="Güzellik"'));
   ui.click({tab: 'health'});
-  assert.ok(ui.html().includes('Önce kendine iyi bak.')); assertStats(ui.html(), state);
+  assert.ok(ui.html().includes('<h1>Sağlık</h1>')); assertStats(ui.html(), state);
 });
 
 test('Future overview, education and jobs are separate segments without changing the game', () => {
@@ -649,21 +664,23 @@ test('Character name opens the non-mutating family trait comparison with current
   assert.equal(ui.storage.get(KEY), before);
 });
 
-test('A stale activity confirmation cannot consume a second year-time unit after its detail dialog closes', () => {
+test('An obsolete activity revision cannot spend another time unit but a fresh deliberate tap can', () => {
   const state = atAge(12), ui = app(state);
-  ui.click({tab: 'activities'}); ui.click({do: 'inspectActivity', id: 'rest'});
-  assert.equal(ui.dialog().dataset.kind, 'activity'); assert.equal(ui.dialog().dataset.activityId, 'rest');
-  ui.click({do: 'activity', id: 'rest'});
+  ui.click({tab: 'activities'});
+  const originalKey = ui.actionKey('rest'); assert.ok(originalKey);
+  ui.click({do: 'activity', id: 'rest', actionKey: originalKey});
   assert.equal(ui.saved().year.used.rest, 1);
   assert.equal(ui.saved().year.energy, state.year.energy - 1);
+  assert.equal(ui.dialog().open, false, 'a normal activity completes without an extra confirmation');
+  assert.notEqual(ui.actionKey('rest'), originalKey);
   const afterFirst = ui.storage.get(KEY);
-  ui.click({do: 'activity', id: 'rest'});
-  assert.equal(ui.storage.get(KEY), afterFirst, 'detached old confirmation is not a new decision to repeat the action');
+  ui.click({do: 'activity', id: 'rest', actionKey: originalKey});
+  assert.equal(ui.storage.get(KEY), afterFirst, 'detached old card is not a new decision to repeat the action');
   ui.click({do: 'inspectActivity', id: 'read'});
   ui.click({do: 'activity', id: 'rest'});
-  assert.equal(ui.storage.get(KEY), afterFirst, 'an open detail dialog for another action does not authorize rest');
-  ui.click({do: 'closeDialog'}); ui.click({do: 'inspectActivity', id: 'rest'}); ui.click({do: 'activity', id: 'rest'});
-  assert.equal(ui.saved().year.used.rest, 2, 'an intentional new inspection and confirmation can repeat an allowed action');
+  assert.equal(ui.storage.get(KEY), afterFirst, 'an open information dialog blocks background actions');
+  ui.click({do: 'closeDialog'}); ui.click({do: 'activity', id: 'rest'});
+  assert.equal(ui.saved().year.used.rest, 2, 'an intentional fresh tap repeats an allowed action');
 });
 
 test('An old choice key cannot choose the same index in a newly queued NPC encounter', () => {
@@ -691,4 +708,151 @@ test('An old choice key cannot choose the same index in a newly queued NPC encou
   ui.click({do: 'showEvent'}); ui.click({do: 'choice', index: '0', eventKey: secondKey});
   assert.equal(ui.saved().pending, null);
   assert.equal(ui.saved().npcs.find(n => n.id === npc.id).role, 'friend', 'the actual encounter choice remains available');
+});
+
+test('Normal activities run in one tap from activities, favorites and health without an extra dialog', () => {
+  for (const surface of ['activities', 'favorites', 'health']) {
+    const state = atAge(12), storage = surface === 'favorites' ? preferencesStorage({favorites: ['rest'], confirmAge: false}) : undefined;
+    const ui = app(state, storage);
+    ui.click({tab: surface === 'health' ? 'health' : 'activities'});
+    if (surface === 'favorites') ui.click({activityFilter: 'favorites'});
+    assert.ok(ui.actionKey('rest'), 'normal action is present on ' + surface);
+    assert.ok(ui.html().includes('class="activity-tools"'));
+    assert.ok(ui.html().includes('class="activity-info"'));
+    const expected = E.migrate(JSON.parse(JSON.stringify(state)));
+    assert.equal(E.act(expected, 'activity', {id: 'rest'}).ok, true);
+    ui.click({do: 'activity', id: 'rest'});
+    assert.equal(ui.saved().year.used.rest, 1, surface);
+    assert.equal(ui.saved().year.energy, expected.year.energy, surface);
+    assert.deepEqual(ui.saved().stats, expected.stats, surface);
+    assert.equal(ui.dialog().open, false, surface + ' avoids an execution confirmation');
+    assertStats(ui.html(), expected);
+  }
+});
+
+test('A free project from progress executes directly but still shows its meaningful milestone notice', () => {
+  const state = atAge(12); state.stats.knowledge = 60;
+  state.inventory = [{id: 'book', condition: 100}]; state.progression.tracks.academic.xp = 60;
+  const ui = app(state); ui.click({tab: 'activities'}); ui.click({activityView: 'progress'});
+  assert.equal(E.actionReason(state, 'research_notebook'), ''); assert.ok(ui.actionKey('research_notebook'));
+  const expected = E.migrate(JSON.parse(JSON.stringify(state)));
+  assert.equal(E.act(expected, 'activity', {id: 'research_notebook'}).ok, true);
+  ui.click({do: 'activity', id: 'research_notebook'});
+  assert.equal(ui.saved().year.used.research_notebook, 1);
+  assert.deepEqual(ui.saved().stats, expected.stats); assert.equal(ui.saved().money, state.money);
+  assert.ok(ui.saved().notices.length > 0);
+  assertNotice(ui, expected);
+});
+
+test('Small activity costs skip confirmation including a sub-threshold cost that is a large share of cash', () => {
+  for (const fixture of [{id: 'swim', cash: 400}, {id: 'personal_style', cash: 10000}]) {
+    const state = atAge(18); state.money = fixture.cash; state.rng = 4000;
+    const ui = app(state); ui.click({tab: 'health'});
+    const expected = E.migrate(JSON.parse(JSON.stringify(state)));
+    const cost = E.costOf(state, D.actions.find(a => a.id === fixture.id));
+    assert.equal(E.act(expected, 'activity', {id: fixture.id}).ok, true);
+    ui.click({do: 'activity', id: fixture.id});
+    assert.equal(ui.saved().money, fixture.cash - cost);
+    assert.equal(ui.saved().year.used[fixture.id], 1);
+    assert.deepEqual(ui.saved().stats, expected.stats);
+    assert.equal(ui.dialog().open, false, fixture.id + ' is not a significant-expense confirmation');
+  }
+});
+
+test('An expensive driving course asks once and rejects wrong-id, wrong-key and cancelled confirmations', () => {
+  const state = atAge(18); state.money = 20000;
+  const ui = app(state); ui.click({tab: 'activities'});
+  const before = ui.storage.get(KEY);
+  ui.click({do: 'activity', id: 'driving_school'});
+  assert.equal(ui.dialog().dataset.kind, 'activity-confirm'); assert.equal(ui.dialog().dataset.activityId, 'driving_school');
+  assertStats(ui.dialogHtml(), state); assert.equal(ui.storage.get(KEY), before);
+  const key = ui.actionKey('driving_school', 'confirmActivity'); assert.ok(key);
+  ui.click({do: 'confirmActivity', id: 'rest', actionKey: key});
+  assert.equal(ui.storage.get(KEY), before);
+  ui.click({do: 'confirmActivity', id: 'driving_school', actionKey: String(Number(key) - 1)});
+  assert.equal(ui.storage.get(KEY), before);
+  assert.equal(ui.dialog().open, true);
+  ui.click({do: 'closeDialog'});
+  assert.equal(ui.storage.get(KEY), before);
+  ui.click({do: 'confirmActivity', id: 'driving_school', actionKey: key});
+  assert.equal(ui.storage.get(KEY), before, 'cancelled confirmation cannot execute after the popup closes');
+  ui.click({do: 'activity', id: 'driving_school'});
+  assert.equal(ui.dialog().dataset.kind, 'activity-confirm'); assert.equal(ui.dialog().open, true);
+  const currentKey = ui.actionKey('driving_school', 'confirmActivity');
+  ui.click({do: 'confirmActivity', id: 'driving_school'});
+  assert.equal(ui.saved().money, 8000); assert.equal(ui.saved().year.used.driving_school, 1);
+  assert.equal(ui.saved().year.energy, state.year.energy - 2); assert.equal(ui.saved().flags.driver_license, true);
+  const after = ui.storage.get(KEY);
+  ui.click({do: 'confirmActivity', id: 'driving_school', actionKey: currentKey});
+  assert.equal(ui.storage.get(KEY), after, 'old confirmation never pays or grants progress twice');
+});
+
+test('A smaller expense still requires confirmation when it materially affects personal cash', () => {
+  const state = atAge(18); state.money = 4000;
+  const ui = app(state); ui.click({tab: 'health'});
+  const before = ui.storage.get(KEY);
+  ui.click({do: 'activity', id: 'personal_style'});
+  assert.equal(ui.dialog().dataset.kind, 'activity-confirm'); assert.equal(ui.dialog().dataset.activityId, 'personal_style');
+  assertStats(ui.dialogHtml(), state); assert.equal(ui.storage.get(KEY), before);
+  ui.click({do: 'confirmActivity', id: 'personal_style'});
+  assert.equal(ui.saved().money, 2800); assert.equal(ui.saved().year.used.personal_style, 1);
+  assert.equal(ui.saved().year.energy, state.year.energy - 1);
+});
+
+test('A parent-paid child medical visit uses its actual zero price and needs no expense confirmation', () => {
+  const state = atAge(8); state.money = 0; state.stats.health = 60;
+  const ui = app(state); ui.click({tab: 'health'});
+  assert.equal(E.costOf(state, D.actions.find(a => a.id === 'doctor')), 0);
+  ui.click({do: 'activity', id: 'doctor'});
+  assert.equal(ui.saved().money, 0); assert.equal(ui.saved().year.used.doctor, 1);
+  assert.equal(ui.saved().year.energy, state.year.energy - 1);
+  assert.ok(ui.saved().stats.health > state.stats.health); assert.equal(ui.dialog().open, false);
+});
+
+test('Insufficient funds are handled before expense confirmation without changing resources', () => {
+  const state = atAge(18); state.money = 11000;
+  const ui = app(state); ui.click({tab: 'activities'});
+  const before = ui.storage.get(KEY);
+  ui.click({do: 'activity', id: 'driving_school'});
+  assert.equal(ui.storage.get(KEY), before); assert.equal(ui.dialog().open, false);
+  assert.ok(ui.nodes.get('#toast').textContent.length > 0, 'the locking reason is explained');
+});
+
+test('A partial local search keeps the current action revision and its visible result remains one-tap actionable', () => {
+  const state = atAge(12), ui = app(state); ui.click({tab: 'activities'});
+  const key = ui.actionKey('rest');
+  ui.input('kendine zaman');
+  assert.ok(ui.searchHtml().includes('data-do="activity" data-id="rest"'));
+  assert.equal(ui.actionKey('rest'), key, 'search redraw does not invalidate current cards');
+  ui.click({do: 'activity', id: 'rest'});
+  assert.equal(ui.saved().year.used.rest, 1); assert.equal(ui.dialog().open, false);
+});
+
+test('Native activity categories combine with search, ready and favorites without changing the saved life', () => {
+  const state = atAge(12), ui = app(state, preferencesStorage({favorites: ['library', 'rest'], confirmAge: false}));
+  ui.click({tab: 'activities'});
+  const before = ui.storage.get(KEY), beforePreferences = ui.storage.get(UI_KEY);
+  const select = ui.html().match(/<select\b[^>]*id="activityCategory"[^>]*>([\s\S]*?)<\/select>/);
+  assert.ok(select, 'categories use a native compact select');
+  assert.ok(select[0].includes('aria-label="Aktivite kategorisi"'));
+  assert.deepEqual([...select[1].matchAll(/<option\b[^>]*value="([^"]+)"/g)].map(m => m[1]), ['all', 'learning', 'social', 'health', 'work', 'creative', 'outdoors']);
+  ui.click({activityFilter: 'ready'}); ui.input('kütüphane'); ui.select('learning');
+  assert.deepEqual(inspectedIds(ui.html()), ['library']);
+  assert.ok(/aria-pressed="true" data-activity-filter="ready"/.test(ui.html()), 'category change preserves the ready filter');
+  assert.ok(ui.html().includes('value="kütüphane"'), 'category change preserves the search query');
+  ui.click({activityFilter: 'favorites'});
+  assert.deepEqual(inspectedIds(ui.html()), ['library']);
+  ui.select('health');
+  assert.deepEqual(inspectedIds(ui.html()), [], 'all three active constraints apply together');
+  ui.input('');
+  assert.deepEqual(inspectedIds(ui.searchHtml()), ['rest'], 'clearing search preserves category and favorites');
+  ui.select('all');
+  assert.deepEqual(new Set(inspectedIds(ui.html())), new Set(['library', 'rest']));
+  const priorMarkup = ui.html();
+  for (const invalid of ['missing-category', '__proto__', 'constructor']) {
+    ui.select(invalid);
+    assert.equal(ui.html(), priorMarkup, 'invalid category is harmless: ' + invalid);
+  }
+  assert.equal(ui.storage.get(KEY), before, 'category changes never spend time, money or RNG');
+  assert.equal(ui.storage.get(UI_KEY), beforePreferences, 'filter changes do not rewrite favorites or other preferences');
 });
