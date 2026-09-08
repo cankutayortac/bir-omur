@@ -407,6 +407,29 @@ dialog::backdrop { background: rgb(4 8 13 / .76); backdrop-filter: none;  }
 .toast.visible { opacity: 1; transform: translate(-50%, 0); } .mobile-hidden { display: none; }
 
 /* Tablets keep the same navigation, with more breathing room. */
+.path-intro { margin-bottom: 16px; }
+.path-list { display: grid; gap: 16px; }
+.path-card, .circle-card { padding: 16px; }
+.path-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+.path-heading > div { min-width: 0; }
+.path-heading h2 { margin: 4px 0 10px; }
+.path-heading .icon-button { flex-shrink: 0; }
+.is-pinned { color: var(--blue); background: var(--light); }
+.path-card > p { color: var(--muted); line-height: 1.6; }
+.path-goal { margin: 14px 0; padding: 12px; background: var(--surface-2); border-radius: 8px; border-left: 3px solid var(--blue); }
+.path-goal p { margin: 6px 0 0; line-height: 1.6; }
+.path-goal small { display: block; color: var(--muted); margin-top: 6px; }
+.path-card .activity-row, .circle-card .activity-row { margin-top: 10px; }
+.path-history { border-top: 1px solid var(--line); margin-top: 16px; padding-top: 12px; }
+.path-history summary { min-height: 36px; color: var(--muted); cursor: pointer; }
+.path-history p { color: var(--muted); margin: 10px 0; line-height: 1.6; }
+.path-history small { color: var(--blue); white-space: nowrap; }
+.circle-card { margin-bottom: 16px; }
+.circle-members { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.pinned-path { border-left: 3px solid var(--blue); }
+.future-tabs { display: grid; grid-template-columns: repeat(4,minmax(0,1fr)); gap: 5px; }
+.future-tabs .tab { padding-inline: 4px; font-size: 12px; }
+
 @media (min-width: 600px) {
   .topbar, .status-dock, .workspace { padding-inline: 24px; }
   .player-strip { grid-template-columns: 56px minmax(0, 1fr) auto; } .player-avatar { width: 56px; height: 58px; }

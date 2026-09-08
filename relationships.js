@@ -10,6 +10,15 @@
   const MAX_MEMORIES = 12;
   const FAMILY = ['mother', 'father', 'child', 'sibling', 'brother', 'sister'];
   const PEERS = ['friend', 'classmate', 'colleague', 'partner', 'spouse'];
+  const INTERESTS = { academic: 'Öğrenme ve araştırma', athletics: 'Spor ve hareket', music: 'Müzik', community: 'Topluluk ve dayanışma' };
+  const PERSONALITIES = {
+    'Sıcakkanlı': { style: 'warm', talk: .5, time: 0, hint: 'İçten bir sohbetle kolayca açılıyor; konuşmaya zaman ayırmanı önemsiyor.', talkText: 'Sohbet bir çaydan başladı, hayat hikâyesine kadar uzandı. İçtenliğin ona iyi geldi.', timeText: 'Birlikte geçirdiğiniz günün en güzel kısmı, araya sıkışan küçük sohbetlerdi.', argueText: 'Sert cümlenin ardından sohbeti sürdürmekte zorlandı. Yakınlık, kırgınlığı yok saymıyor.' },
+    'İçe dönük': { style: 'reserved', talk: 0, time: .5, hint: 'Sakin, birlikte geçirilen bir günde daha rahat açılıyor; sessizlik de ona alan tanıyor.', talkText: 'Cevap vermeden biraz düşündü. Sessizliği doldurmaya çalışmaman hoşuna gitti.', timeText: 'Günün her dakikasını konuşarak doldurmadınız. Yanında rahatça susabilmek ona iyi geldi.', argueText: 'Düşünmek için biraz alan istedi. Bu, konunun çözüldüğü veya seni duymadığı anlamına gelmiyor.' },
+    'Hırslı': { style: 'driven', talk: .25, time: .25, hint: 'Hedeflerini konuşmayı ve birlikte somut bir şey denemeyi seviyor; sonucu dayatmadan ilgilenebilirsin.', talkText: 'Küçük bir hedefinden söz etti; anlatırken gözleri parladı. “Dünya hâkimiyeti kısmını sonraya bırakalım” diye güldünüz.', timeText: 'Birlikte bir şey denemek hoşuna gitti. Günün sonunda başarı tablosu değil, güzel bir anı kaldı.', argueText: 'Farklı düşünmekle birbirinizi küçümsemenin aynı şey olmadığını söyledi. Konu biraz sakinleşmeyi bekliyor.' },
+    'Duyarlı': { style: 'empathetic', talk: .5, time: 0, hint: 'Yargılanmadan dinlenmeyi önemsiyor; her duygunun hemen çözülmesi gerekmediğini düşünüyor.', talkText: 'Hemen çözüm üretmek yerine dinledin. “Bazen sadece duyulmak yetiyor” dedi.', timeText: 'Günün küçük ayrıntılarını fark etti. Birlikte iyi hissetmek için büyük bir plana ihtiyaç duymadınız.', argueText: 'Sözlerinin nasıl hissettirdiğini anlattı. Niyetin kadar yarattığı etki de aranızda kaldı.' },
+    'Maceracı': { style: 'adventurous', talk: 0, time: .5, hint: 'Birlikte küçük keşifler yapmayı seviyor; yenilik risk almak zorunda olmak demek değil.', talkText: 'Konuşurken yeni bir yer görme fikri çıktı. Şimdilik yalnızca fikir; kimse bavul hazırlamak zorunda değil.', timeText: 'Dönüş yolunda küçük bir keşif yaptınız. Harita biraz öneri gibiydi ama gün güzeldi.', argueText: 'Sohbetin tartışmaya dönmesini istemediğini söyledi. Ortam değiştirmek kırgınlığı kendiliğinden silmedi.' },
+    'Disiplinli': { style: 'disciplined', talk: 0, time: .5, hint: 'Birlikte ayrılan zamanın gerçekten yaşanmasını önemsiyor; küçük, tutarlı davranışları fark ediyor.', talkText: 'Düşüncelerini dikkatle toparladı. Sohbetin sonunda bir kontrol listesi çıkarmamayı başardı.', timeText: 'Birlikte ayırdığınız zamanı önemsemen hoşuna gitti. Takvimdeki kutucuğun içinde güzel bir gün vardı.', argueText: 'Konuyu somut ve sakin konuşmak istedi. Sert sözler yerine neyin değişebileceğini duymayı bekliyor.' }
+  };
   const clamp = (value, lo = 0, hi = 100) => Math.max(lo, Math.min(hi, Number.isFinite(Number(value)) ? Number(value) : lo));
   const integer = (value, fallback = 0) => Number.isFinite(Number(value)) ? Math.trunc(Number(value)) : fallback;
   const ageOf = s => clamp(integer(s && s.age), 0, 130);
@@ -25,11 +34,37 @@
   };
   const alive = (s, n) => !!(s && s.alive !== false && n && n.alive);
   const isFamily = n => !!n && (FAMILY.includes(n.role) || FAMILY.includes(n.contextRole) || !!n.parentId);
-  const protectedMentor = n => !!n && (n.role === 'mentor' || n.contextRole === 'mentor' || n.mentorProtected);
+  const protectedMentor = n => !!n && (['mentor', 'teacher'].includes(n.role) || ['mentor', 'teacher'].includes(n.contextRole) || n.mentorProtected);
   const isPeer = n => !!n && PEERS.includes(n.role) && !isFamily(n) && !protectedMentor(n);
   const initialTrust = n => n.role === 'child' ? 56 : ['mother', 'father'].includes(n.role) ? 54 :
     n.role === 'spouse' ? 64 : n.role === 'partner' ? 56 : isFamily(n) ? 48 :
     Math.round(clamp(26 + (clamp(n.bond) - 35) * .25, 22, 45));
+
+  function identityHash(s, n, label) {
+    let hash = 2166136261;
+    for (const c of `${s?.seed ?? 0}:${n?.id || ''}:${label}`) hash = Math.imul(hash ^ c.charCodeAt(0), 16777619);
+    hash = Math.imul(hash ^ (hash >>> 16), 0x7feb352d);
+    return (hash ^ (hash >>> 15)) >>> 0;
+  }
+  function interestOf(s, n) { return Object.hasOwn(INTERESTS, n?.interest) ? n.interest : Object.keys(INTERESTS)[identityHash(s, n, 'interest') % 4]; }
+  function responseProfile(s, n) {
+    const old = n.personalityResponse && typeof n.personalityResponse === 'object' ? n.personalityResponse : {};
+    return { version: 1, style: PERSONALITIES[n.personality]?.style || 'balanced',
+      introducedAge: clamp(integer(old.introducedAge, ageOf(s)), 0, ageOf(s)),
+      bonusYear: clamp(integer(old.bonusYear, -1), -1, ageOf(s)), bonusUsed: clamp(old.bonusUsed || 0, 0, .5) };
+  }
+  function personalityBonus(s, n, interaction) {
+    const profile = n.personalityResponse, preference = PERSONALITIES[n.personality]?.[interaction] || 0;
+    if (profile.bonusYear !== ageOf(s)) { profile.bonusYear = ageOf(s); profile.bonusUsed = 0; }
+    const base = interaction === 'talk' ? (n.trust >= 70 ? .5 : 1) : (n.trust >= 70 ? 1 : 2);
+    const extra = Math.round(Math.max(0, Math.min(preference, .5 - profile.bonusUsed, 100 - n.trust - base)) * 100) / 100;
+    profile.bonusUsed = Math.round((profile.bonusUsed + extra) * 100) / 100;
+    return extra;
+  }
+  function responseText(n, interaction, extra = 0) {
+    const text = PERSONALITIES[n.personality]?.[interaction + 'Text'] || '';
+    return text + (extra ? ` Bu yılki kişilik uyumu: güven +${String(extra).replace('.', ',')}.` : '');
+  }
 
   function normalizeHistory(n) {
     const raw = n.relationshipHistory && typeof n.relationshipHistory === 'object' ? n.relationshipHistory : {};
@@ -56,6 +91,8 @@
   }
   function migrateNpc(s, n) {
     if (!n || typeof n !== 'object') return n;
+    n.interest = interestOf(s, n);
+    n.personalityResponse = responseProfile(s, n);
     n.trust = n.trust === undefined || n.trust === null || !Number.isFinite(Number(n.trust)) ? initialTrust(n) : clamp(n.trust);
     const seen = new Set();
     n.memories = (Array.isArray(n.memories) ? n.memories : []).filter(m => m && typeof m === 'object').map((m, index) => {
@@ -67,7 +104,7 @@
     n.promise = normalizePromise(n);
     n.relationshipHistory = normalizeHistory(n);
     n.relationshipHistory.memorySerial = Math.max(n.relationshipHistory.memorySerial, n.memories.length);
-    if (n.contextRole === 'mentor' || n.role === 'mentor') n.mentorProtected = true;
+    if (protectedMentor(n)) n.mentorProtected = true;
     return n;
   }
   const initNpc = migrateNpc;
@@ -137,13 +174,19 @@
     if (h.socialUsed.includes(interaction)) return { message: '', trustDelta: 0 };
     h.socialUsed.push(interaction);
     let message = '';
-    if (interaction === 'talk') remember(s, n, 'talk', n.trust >= 70 ? .5 : 1, 'Yargılamadan birbirinizi dinlediniz. Küçük ama gerçek bir yakınlık.');
+    if (interaction === 'talk') {
+      const extra = personalityBonus(s, n, interaction); message = responseText(n, interaction, extra);
+      remember(s, n, 'talk', (n.trust >= 70 ? .5 : 1) + extra, message || 'Yargılamadan birbirinizi dinlediniz. Küçük ama gerçek bir yakınlık.');
+    }
     if (interaction === 'time') {
       if (fulfillPromise(s, n)) message = `Geçen yıl ${n.name} için verdiğin sözü tuttun. Güven +5.`;
-      else remember(s, n, 'time', n.trust >= 70 ? 1 : 2, 'Gününü onunla paylaştın. Sözlerden çok davranışların akılda kalıyor.');
+      else {
+        const extra = personalityBonus(s, n, interaction); message = responseText(n, interaction, extra);
+        remember(s, n, 'time', (n.trust >= 70 ? 1 : 2) + extra, message || 'Gününü onunla paylaştın. Sözlerden çok davranışların akılda kalıyor.');
+      }
     }
     if (interaction === 'gift') remember(s, n, 'gift', 0, 'Hediyeni sevdi. Yakınlık arttı; güveni ise zaman ve tutarlılık belirleyecek.');
-    if (interaction === 'argue') remember(s, n, 'argument', -9, 'Sert sözlerin aklında kaldı. Bu kırgınlık bir özürle ancak kısmen onarılabilir.');
+    if (interaction === 'argue') { message = responseText(n, interaction); remember(s, n, 'argument', -9, message || 'Sert sözlerin aklında kaldı. Bu kırgınlık bir özürle ancak kısmen onarılabilir.'); }
     if (interaction === 'apologize') { repair(s, n); message = 'Açık kırgınlığı konuştunuz. Özür, güvenin yalnızca bir bölümünü geri getirdi.'; }
     if (interaction === 'promise' && makePromise(s, n)) message = `${n.name} için ${n.promise.dueAge} yaşında “Birlikte zaman geçir” eylemine 1 zaman ayıracağına söz verdin. Tutarsan güven +5; tutmazsan −10.`;
     if (interaction === 'ask' && context.aid > 0) remember(s, n, 'aid', 0, 'Sana destek oldu. Bu yardım, yıllar içinde kurduğun güvene dayanıyor.');
@@ -242,9 +285,22 @@
       choice('Dışarı çık; telefonları masadan kaldır · 1 zaman', 'Garson sizi yeni tanışmış sandı. {npc} ile gülüşüp onu düzeltmediniz. İkinizin de istediği uzun bir öpücükle akşamı bitirdiniz.', { memory: { kind: 'shared_history', trust: 2 }, happiness: 5, stress: -3 }, { energy: 1, cost: 2200 }),
       choice('Evde makarna, mum ve biraz cesaret · 1 zaman', 'Makarna biraz fazla pişti; sohbet tam kıvamındaydı. {npc}, “Şeflik kariyerin tartışılır ama bu akşamı sevdim” dedi. Gecenin devamı ikinize kaldı.', { memory: { kind: 'shared_history', trust: 1 }, happiness: 4, stress: -2 }, { energy: 1 }),
       choice('Bu akşam dinlenmeye ihtiyacın olduğunu söyle', '{npc} bunu kişisel almadı. Yakınlık, her davete evet demek zorunda olmadan da sürüyordu.', { memory: { kind: 'respect', trust: 0 } })
-    ], { npcMinAge: 18 })
+    ], { npcMinAge: 18 }),
+    event('initiative_study_invitation', 'Bu kez çalışma fikri {npc}\'den', '{npc}, birlikte bir konu seçip çalışmayı öneriyor. “Birimiz bilmezsek öteki bakar; ikimiz de bilmezsek kütüphane bunun için var.” Bu yalnızca bir davet, verilmiş bir söz değil.', 6, [
+      choice('“Tamam; zor sorulara topluca kaş çatalım.” · 1 zaman', 'Bir konuya birlikte odaklandınız. Bildiklerinizi paylaşırken yeni bir şey öğrendin; tanışıklığınızın adını değiştirmek zorunda değilsiniz.', { skillXP: { academic: 6, social: 3 }, memory: { kind: 'shared_history', trust: 2 }, happiness: 2 }, { energy: 1 }),
+      choice('Bu yıl başka şeylere zaman ayıracağını söyle', '{npc} planına saygı duydu. Daveti geri çevirmek bir söz bozmak veya arkadaşlığı reddetmek değildi.', {})
+    ]),
+    event('initiative_shared_plan', '{npc} takvime küçük bir plan getiriyor', '{npc}, ortak ilginize uygun küçük bir etkinliğe birlikte gitmeyi öneriyor. “Program esnek; atıştırmalık molası konusunda ise ciddiyim.” Katılmak isteyip istemediğini sen seçersin.', 8, [
+      choice('“Geliyorum; molayı programa kalın harfle yaz.” · 1 zaman', 'Birlikte seçtiğiniz etkinlikte keyifli bir gün geçirdiniz. Yeni bir anı oluştu; arkadaşlık veya romantizm kendiliğinden başlamadı.', { skillXP: { social: 6 }, memory: { kind: 'shared_history', trust: 2 }, happiness: 4, stress: -2 }, { energy: 1 }),
+      choice('Teşekkür et, bu kez kendi planında kal', '{npc} bunu kişisel almadı. Yakın olmak her davete evet demek zorunda olmak değildi.', {})
+    ]),
+    event('initiative_mentor_encouragement', '“İlerlemeni fark ettim”', '{npc}, merakını ve çabanı fark ettiğini söylüyor. Bir sonraki küçük hedefini konuşmak için zaman ayırabilir. Rehberlik teklif ediyor; hayatının yönetimini devralmıyor.', 6, [
+      choice('“Bir hedef seçelim; dünyayı kurtarmak sonraya.” · 1 zaman', '{npc} ile yapabileceğin bir sonraki adımı konuştunuz. Bu bir başarı garantisi değil, yolunu seçerken kullanabileceğin bir rehberlikti.', { skillXP: { academic: 8, social: 2 }, memory: { kind: 'support', trust: 2 }, happiness: 2, stress: -2 }, { energy: 1 }),
+      choice('Teşekkür et; şimdilik kendi hızında devam et', '{npc}, kendi yolunu düşünmene alan tanıdı. Desteği kabul etmemek notlarını, güveninizi veya ilişkinizin adını değiştirmedi.', {})
+    ])
   ];
   const EVENT_IDS = new Set(events.map(e => e.id));
+  const INITIATIVE_IDS = ['initiative_study_invitation', 'initiative_shared_plan', 'initiative_mentor_encouragement'];
 
   function applyEffects(s, n, effects = {}) {
     if (!alive(s, n)) return { message: '', trustDelta: 0 };
@@ -298,6 +354,8 @@
   function candidate(s) {
     if (!s || s.alive === false || ageOf(s) < 6 || !Array.isArray(s.npcs)) return null;
     const candidates = [];
+    const lastInitiative = Math.max(-100, ...INITIATIVE_IDS.flatMap(id => [s.seenEvents?.[id], ...s.npcs.map(n => n?.relationshipHistory?.eventSeen?.[id])]).filter(Number.isFinite));
+    const initiativesReady = ageOf(s) - lastInitiative >= 3;
     const add = (n, id, score, cooldown = 5) => {
       const h = n.relationshipHistory || {}, age = ageOf(s), last = h.eventSeen && h.eventSeen[id];
       if (Number.isFinite(last) && age - last < cooldown) return;
@@ -320,6 +378,18 @@
       if (ageOf(s) >= 18 && n.age >= 18 && ['partner', 'spouse'].includes(n.role) && !isFamily(n) && !protectedMentor(n) && trust >= 45 && n.bond >= 40) add(n, 'memory_partner_date', 55, 5);
       if (ageOf(s) >= 12 && n.age >= 12 && isPeer(n) && trust >= 58 && n.bond >= 55) add(n, 'memory_confidence', 50, 6);
       if (ageOf(s) >= 10 && trust >= 65 && n.bond >= 65 && trustedActs >= 2 && n.role !== 'acquaintance') add(n, 'memory_shared_history', 40, 6);
+      const profile = responseProfile(s, n), knownLongEnough = ageOf(s) - profile.introducedAge >= 2;
+      const initiativeYear = (ageOf(s) + identityHash(s, n, 'initiative')) % 3 === 0;
+      if (initiativesReady && knownLongEnough && initiativeYear && !isFamily(n) && !wound && trust >= 40 && n.bond >= 45) {
+        const closeAge = ageOf(s) < 18 ? n.age >= 6 && n.age < 18 && Math.abs(n.age - ageOf(s)) <= 3 : n.age >= 18 && Math.abs(n.age - ageOf(s)) <= 12;
+        const peer = isPeer(n) || (n.role === 'acquaintance' && ['classmate', 'colleague', 'friend'].includes(n.contextRole) && !protectedMentor(n));
+        if (peer && closeAge) {
+          if (interestOf(s, n) === 'academic') add(n, 'initiative_study_invitation', 32, 4);
+          else if (ageOf(s) >= 8) add(n, 'initiative_shared_plan', 31, 4);
+        }
+        const learning = (ageOf(s) >= 6 && ageOf(s) < 18) || !!s.education?.courseId || (ageOf(s) >= 18 && ageOf(s) <= 30);
+        if (protectedMentor(n) && n.age >= 21 && n.age >= ageOf(s) + 5 && learning) add(n, 'initiative_mentor_encouragement', 34, 4);
+      }
     }
     candidates.sort((a, b) => b.score - a.score || String(a.npcId).localeCompare(String(b.npcId)) || a.id.localeCompare(b.id));
     return candidates.length ? { id: candidates[0].id, npcId: candidates[0].npcId } : null;
@@ -327,7 +397,10 @@
   function overview(s, n) {
     if (!n) return null;
     const trust = trustOf(n), promise = normalizePromise(n), openHurts = hurts(n).length;
-    return { trust, label: trust < 25 ? 'Kırılgan güven' : trust < 45 ? 'Birbirinizi tanıyorsunuz' : trust < 65 ? 'Güven oluşuyor' : trust < 80 ? 'Sözüne güveniyor' : 'Sağlam güven',
+    const interest = interestOf(s, n);
+    return { trust, personality: clean(n.personality, 60) || 'Kendine özgü', interest: { id: interest, name: INTERESTS[interest] },
+      responseHint: PERSONALITIES[n.personality]?.hint || 'Kişiliğini tek bir etiket anlatmaz. Birlikte zaman geçirerek nasıl iletişim kurduğunu tanıyabilirsin.',
+      label: trust < 25 ? 'Kırılgan güven' : trust < 45 ? 'Birbirinizi tanıyorsunuz' : trust < 65 ? 'Güven oluşuyor' : trust < 80 ? 'Sözüne güveniyor' : 'Sağlam güven',
       memories: (Array.isArray(n.memories) ? n.memories : []).slice(-MAX_MEMORIES).reverse().map(m => ({ ...m })),
       promise, promiseText: !promise ? '' : promise.status === 'active' ? `${promise.dueAge} yaşında 1 zaman ayır: birlikte zaman geçir.` : promise.status === 'kept' ? 'Son sözünü tuttun.' : promise.status === 'broken' ? 'Son sözün tutulmadı; güven zamanla onarılabilir.' : 'Birlikte planladığınız gün yarım kaldı.',
       openHurts, aidAvailable: alive(s, n) && trust >= 50, referralAvailable: alive(s, n) && trust >= 72,

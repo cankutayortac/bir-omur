@@ -1,10 +1,11 @@
 (function (root, factory) {
   const common = typeof module === 'object' && module.exports;
-  const api = factory(common ? require('./content.js') : root.LifeData, common ? require('./progression.js') : root.LifeProgression, common ? require('./economy.js') : root.LifeEconomy, common ? require('./relationships.js') : root.LifeRelationships);
+  const api = factory(common ? require('./content.js') : root.LifeData, common ? require('./progression.js') : root.LifeProgression, common ? require('./economy.js') : root.LifeEconomy, common ? require('./relationships.js') : root.LifeRelationships, common ? require('./lifepaths.js') : root.LifePaths);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.LifeEngine = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (Data, Progression, Economy, Relationships) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (BaseData, Progression, Economy, Relationships, LifePaths) {
   'use strict';
+  const Data = { ...BaseData, actions: [...BaseData.actions, ...LifePaths.actions] };
 
   // Saved stat keys stay stable; social skill is separate from appearance.
   const STAT_NAMES = { knowledge: 'Zekâ', strength: 'Kuvvet', charisma: 'Güzellik', happiness: 'Mutluluk', health: 'Sağlık', stress: 'Stres' };
@@ -26,7 +27,7 @@
   const number = (n, fallback = 0) => Number.isFinite(Number(n)) ? Number(n) : fallback;
   const cash = n => Math.round(clamp(n, 0, 100000000000));
   const fmt = n => Math.round(n).toLocaleString('tr-TR') + ' ₺';
-  const allEvents = [...Data.events, ...Relationships.events];
+  const allEvents = [...Data.events, ...Relationships.events, ...LifePaths.events];
   const dataList = key => key === 'events' ? allEvents : Array.isArray(Data && Data[key]) ? Data[key] : [];
   const get = (key, id) => dataList(key).find(x => x.id === id);
   const isParent = n => n.role === 'mother' || n.role === 'father';
@@ -117,7 +118,7 @@
     s.milestones.push({ id, age: s.age, title, text });
     log(s, title, text, 'milestone');
     const tips = {school:'Gelecek menüsünde okul başarını takip et. Aktiviteler → Öğrenme ile ders çalışabilir ve okul çevreni tanıyabilirsin.',middle:'Yeni okul, yeni çevre. Derslerle arkadaşlıklara ayırdığın zamanı dengele.',high:'Mezuniyet notun bölüm ve burs seçeneklerini belirler. Gelecek ekranındaki koşullara şimdiden göz at.',graduate:'Okul bitti; faturalar henüz yeni başlıyor. Gelecek menüsünden bir işe veya eğitime başvur; yıllık bütçeni de kontrol et.',adult:'18 yaşından sonraki tam yılın yaşam giderleri sana ait. Aile yanı, paylaşımlı ev ve tek başına yaşama aynı bütçeyi gerektirmez.','first-job':'Maaş bir tam yıl sonunda ödenir. Tam zamanlı iş serbest zamanını azaltır; bütçe, dinlenme ve gelişim arasında denge kur.',parent:'Çocuğun büyüdükçe ihtiyaçları ve ilişkiniz değişir. Bakım giderleri yıllık bütçeye eklendi.'};
-    if(tips[id] || /^(degree:|promotion:|skill-|project:)/.test(id)) queueNotice(s,id,title,text,tips[id]||'Yeni imkânlarını Aktiviteler → Gelişim ve Gelecek ekranlarından inceleyebilirsin.');
+    if(tips[id] || /^(degree:|promotion:|skill-|project:|path:)/.test(id)) queueNotice(s,id,title,text,tips[id]||'Yeni imkânlarını Gelecek → Hayat yolları ve Aktiviteler → Gelişim ekranlarından inceleyebilirsin.');
   }
   function queueNotice(s,topic,title,text,tip='') {
     const id=topic+':'+s.age;
@@ -179,6 +180,45 @@
     const encounter=Relationships.introduction(s,npc);if(encounter)s.encounters.push(encounter);
     return npc;
   }
+  function circleKey(s,mode) {
+    return mode==='work'?(s.job?'work:'+s.job.id:null):s.age>=6&&s.age<18?'school:'+(s.age<11?'primary':s.age<14?'middle':'high'):null;
+  }
+  function circleOverview(s) {
+    const mode=s.age<18?'school':'work',key=circleKey(s,mode);
+    return {title:mode==='school'?'Okul çevren':'İş çevren',actionId:mode==='school'?'school_circle':'work_circle',available:!!key,
+      members:key?s.npcs.filter(n=>n.alive&&n.circleId===key).map(n=>({id:n.id,name:n.name,role:n.circleRole||n.contextRole||n.role,interest:n.interest})):[]};
+  }
+  function introduceCircleNpc(s,key,mode,interest,mentor=false) {
+    if(s.npcs.filter(n=>n.alive&&!isParent(n)).length>=24)return null;
+    const npc=makeNpc(s,'acquaintance',{circleId:key,circleRole:mentor?'mentor':mode==='school'?'classmate':'colleague',
+      contextRole:mentor?'mentor':mode==='school'?'classmate':mode==='work'?'colleague':'friend',mentorProtected:mentor,
+      ...(interest?{interest}:{}),age:mentor?Math.max(27,s.age+15):Math.max(6,s.age),
+      ...(mode==='school'?{job:mentor?'Öğretmen':'Öğrenci',income:mentor?480000:0}:{})});
+    const encounter=Relationships.introduction(s,npc);if(encounter)s.encounters.push(encounter);
+    return npc;
+  }
+  function exploreCircle(s,mode) {
+    const key=circleKey(s,mode);if(!key)return '';
+    const members=s.npcs.filter(n=>n.alive&&n.circleId===key);
+    if(members.length<3){
+      const mentor=members.filter(n=>!n.mentorProtected).length>=2;
+      const npc=introduceCircleNpc(s,key,mode,mentor?'academic':['academic','athletics','music'][members.length],mentor);
+      if(npc)return `${mode==='school'?'Okulda':'İş yerinde'} ${npc.name} ile tanıştın. ${mentor?'Deneyimli bir rehber; aranızdaki ilişki romantik olamaz.':'Aynı çevrede yeniden görüşeceksiniz; arkadaşlık kararı sana ait.'}`;
+    }
+    if(members.length){
+      const npc=members[s.age%members.length];
+      return `${npc.name} ile aynı masada yeniden karşılaştınız. Onunla sohbet etmek veya birlikte zaman geçirmek için İlişkiler menüsünü kullanabilirsin.`;
+    }
+    return 'Çevrene zaman ayırdın. Yeni tanışıklıklar için hayatında şu an yeterince yer yok.';
+  }
+  function pathCompanion(s,id) {
+    const circle=circleKey(s,s.age<18?'school':'work')||'community:'+id;
+    const old=s.npcs.find(n=>n.alive&&!n.mentorProtected&&n.interest===id&&(n.circleId===circle||n.pathCircle===id)&&!isParent(n)&&!['child','sibling','ex'].includes(n.role));
+    if(old)return old;
+    const npc=introduceCircleNpc(s,circle,s.age<18?'school':s.job?'work':'community',id);
+    if(npc)npc.pathCircle=id;
+    return npc;
+  }
   function newLife(options = {}) {
     const seed = seedNumber(options.seed);
     const s = { version: 3, seed, rng: seed, name: String(options.name || 'Deniz').trim().slice(0, 40) || 'Deniz', gender: ['male', 'female', 'other'].includes(options.gender) ? options.gender : 'female',
@@ -191,7 +231,7 @@
     s.city = pick(s, ['İstanbul', 'Ankara', 'İzmir', 'Bursa', 'Eskişehir', 'Antalya', 'Samsun']);
     s.appearance.hair = s.gender === 'female' ? 'wave' : 'short';
     s.stats = { knowledge: 0, strength: int(s, 7, 18), charisma: 0, happiness: int(s, 66, 88), health: int(s, 80, 97), stress: int(s, 0, 8) };
-    s.progression=Progression.create(s);Economy.create(s);
+    s.progression=Progression.create(s);s.lifePaths=LifePaths.create();Economy.create(s);
     makeNpc(s, 'mother', { gender: 'female', age: int(s, 21, 38), bond: int(s, 65, 95) });
     makeNpc(s, 'father', { gender: 'male', age: int(s, 23, 43), bond: int(s, 55, 92) });
     const inherited = inheritTraits(s.npcs[0].traits, s.npcs[1].traits, () => random(s));
@@ -259,6 +299,10 @@
     const reqStats = r.stats || r.req || {};
     for (const [key, value] of Object.entries(reqStats)) if ((s.stats[key] || 0) < value) return `${STAT_NAMES[key] || key}: en az ${value} gerekli.`;
     for(const [key,tier] of Object.entries(r.skills||{}))if(Progression.tierFor(s,key)<tier)return `${Progression.tracks.find(t=>t.id===key)?.name||key}: en az ${tier}. uzmanlık basamağı gerekli.`;
+    if(r.path){
+      const route=s.lifePaths?.routes?.[r.path.id];
+      if(!route||route.stage!==(r.path.stage||'completed')||(r.path.outcome&&route.outcome!==r.path.outcome))return `${{academic:'Araştırma',athletics:'Spor',music:'Müzik'}[r.path.id]||'İlgili hayat'} yolunun ücretli mesleki aşamasını tamamlamalısın. Gelecek → Hayat yolları.`;
+    }
     for (const id of [].concat(r.items || r.item || [])) if (!hasItem(s, id)) return `${(get('items', id) || {}).name || id} gerekli.`;
     for (const id of [].concat(r.flags || [])) if (!s.flags[id]) return 'Bu seçenek için önceki bir gelişme gerekiyor.';
     for (const id of [].concat(r.notFlags || [])) if (s.flags[id]) return 'Önceki kararların bu seçeneği kapattı.';
@@ -295,6 +339,7 @@
     if (!a) return 'Bu etkinlik bulunamadı.';
     reason = requirementReason(s, { minAge: a.minAge || 0, maxAge: a.maxAge, ...(a.requires || {}) });
     if (reason) return reason;
+    reason = LifePaths.actionReason(s,a);if(reason)return reason;
     if (s.year.energy < (a.energy || 1)) return 'Bu yıl yeterli zamanın kalmadı.';
     if ((s.year.used[a.id] || 0) >= (a.perYear || a.limit || 2)) return 'Bu etkinlik için yıllık sınıra ulaştın.';
     if (s.money < costOf(s, a)) return `${fmt(costOf(s, a))} gerekiyor.`;
@@ -307,6 +352,7 @@
     if (!choice) return 'Bu karar bulunamadı.';
     const req = requirementReason(s, { minAge: choice.minAge, maxAge: choice.maxAge, ...(choice.requires || {}) });
     if (req) return req;
+    const pathReason=LifePaths.choiceReason(s,choice);if(pathReason)return pathReason;
     if (s.money < costOf(s,choice)) return `${fmt(costOf(s,choice))} gerekiyor.`;
     if(s.year.energy<(choice.energy||0))return `Bu seçim için ${choice.energy} zaman puanı gerekiyor.`;
     return '';
@@ -390,6 +436,7 @@
     }
     if (effects.scholarship) s.education.scholarship = Math.max(s.education.scholarship || 0, clamp(effects.scholarship, 0, 1));
     if (effects.jobLoss && s.job) { log(s, 'İşini kaybettin', 'Bu olayın ardından iş sözleşmen sona erdi.', 'career'); s.job = null; }
+    for(const entry of LifePaths.applyEffects(s,effects,npcId)||[])milestone(s,'path:'+entry.id,entry.title,entry.text);
   }
   function die(s, cause) {
     s.alive = false; s.deathCause = cause; s.pending = null; s.stats.health = 0;
@@ -576,7 +623,9 @@
     if (job.performance < 22) { log(s, 'İş sözleşmen sona erdi', 'Düşen performansın nedeniyle işini kaybettin. Yılın çalıştığın gelirini aldın; gelecek yıl için yeni bir iş aramalısın.', 'career'); s.job = null; applyEffects(s, { happiness: -8, stress: 10 }); return; }
     const trainingReady=Object.entries(c?.requires?.skills||{}).every(([id,tier])=>Progression.tierFor(s,id)>=Math.min(4,tier+Math.floor(job.level/2)));
     if (job.performance >= 80 && job.years >= job.level * 3 && job.level < 5 && trainingReady) {
-      job.level++; job.salary = Math.round(job.salary * 1.18); job.performance = Math.max(55, job.performance - 13);
+      // Only future promotions change; saved salaries are never cut on migration.
+      const raise=[0,.14,.11,.08,.06][job.level]||0;
+      job.level++; job.salary = Math.round(job.salary * (1+raise)); job.performance = Math.max(55, job.performance - 13);
       milestone(s, 'promotion:' + job.id + ':' + job.level, 'Bir basamak yukarı', `${c?.name || 'Mesleğin'} alanında ${job.level}. kıdeme yükseldin. Yeni yıllık brüt maaşın ${fmt(Economy.salary(s,job.salary))}.`);
     }
     if (s.age === 65) log(s, 'Emekliliğe bir bakış', 'Emeklilik seçeneğini değerlendirebilirsin. Emekli gelirin çalışma sürene ve son maaşına bağlı.', 'career');
@@ -633,7 +682,7 @@
     resetYear(s);
     activateEncounter(s);
     const memoryEvent=Relationships.candidate(s);
-    if(!s.pending)s.pending=memoryEvent&&(/^memory_.*promise|memory_promise/.test(memoryEvent.id)||random(s)<.4)?memoryEvent:selectEvent(s);
+    if(!s.pending)s.pending=LifePaths.candidate(s)||(memoryEvent&&(/^memory_.*promise|memory_promise/.test(memoryEvent.id)||random(s)<.4)?memoryEvent:selectEvent(s));
     return { ok: true, message: s.pending ? 'Yeni yaşında bir karar seni bekliyor.' : `${s.age} yaşındasın. Yeni bir yıl seni bekliyor.` };
   }
   function resolveChoice(s, index) {
@@ -660,6 +709,7 @@
     log(s, event.title.replaceAll('{npc}', npcName), `${choice.label || choice.text}: ${outcome}`, 'decision');
     checkDeath(s);
     activateEncounter(s);
+    if(!s.pending&&s.alive)s.pending=LifePaths.candidate(s);
     return { ok: true, message: outcome };
   }
   function lifestyleReason(s, key, value) {
@@ -676,6 +726,11 @@
   }
 
   function act(s, type, payload = {}) {
+    // Tracking a goal is read-only with respect to the simulation, even during a decision.
+    if(type==='pinPath'){
+      if(!s||!LifePaths.pin(s,payload.id??null))return {ok:false,message:'Bu hayat yolu bulunamadı.'};
+      return {ok:true,message:payload.id?'Hedefin hayat defterine sabitlendi.':'Hedef sabitlemesi kaldırıldı.'};
+    }
     if(type==='ackNotice'){
       if(!s||!Array.isArray(payload.ids))return {ok:false,message:'Bildirim bulunamadı.'};
       s.notices=s.notices.filter(n=>!payload.ids.includes(n.id));return {ok:true,message:''};
@@ -696,7 +751,10 @@
       if(a.project&&!projectComplete){s.flags[a.project.flag]=true;milestone(s,'project:'+a.id,a.project.title,a.project.text);}
       if (a.special === 'treatment' || ['doctor', 'public_clinic'].includes(a.id)) treat(s, a.id === 'public_clinic');
       if ((a.meetChance || a.meet) && random(s) < (a.meetChance || a.meet)) meet(s, a.name, a.meetRole);
-      const message = a.outcome || `${a.name} için zaman ayırdın.`;
+      const circleMessage=a.circle?exploreCircle(s,a.circle):'';
+      if(a.pathStart){const companion=pathCompanion(s,a.pathStart);if(companion)LifePaths.bindNpc(s,a.pathStart,companion.id);}
+      if(a.careerEvent&&get('events',a.careerEvent)&&!s.pending)s.pending={id:a.careerEvent};
+      const message = circleMessage || a.outcome || `${a.name} için zaman ayırdın.`;
       log(s, a.name, message, a.category === 'health' ? 'health' : 'activity'); checkDeath(s);
       activateEncounter(s);return { ok: true, message };
     }
@@ -820,7 +878,7 @@
     for(const npc of s.npcs)Relationships.migrateNpc(s,npc);
     migrateGenetics(s,old.genetics);
     if(!old.genetics)queueNotice(s,'family-traits','Ailenden bir iz, senden bir yol','Karizma puanın artık Güzellik, Bilgi puanın Zekâ olarak görünüyor. Mevcut puanların korundu; iletişim ayrı bir uzmanlık olarak gelişiyor.','Eski hayatının doğum puanları bilinmiyor. Yeni hayatlarda zekâ ve güzellik, anne ile babanın özellikleri ve rastgele farklılıklarla belirlenir. Aile izi ekranından karşılaştırabilirsin.');
-    s.progression=Progression.migrate(s,old.progression);Economy.migrate(s,old.economy);
+    s.progression=Progression.migrate(s,old.progression);s.lifePaths=LifePaths.migrate(s,old.lifePaths);Economy.migrate(s,old.economy);
     s.inventory = s.inventory.filter(i => i && get('items', i.id)).map(i => ({ id: i.id, condition: clamp(i.condition) })).filter(i => i.condition > 0);
     s.conditions = s.conditions.filter(c => c && c.id).map(c => ({ ...c, severity: clamp(c.severity, 1, 5), since: number(c.since, s.age), managedUntil: number(c.managedUntil, -1) }));
     s.scheduled = s.scheduled.filter(e => e && get('events', e.id)).map(e => ({ ...e, age: Math.round(clamp(e.age, 0, 125)) }));
@@ -832,11 +890,13 @@
     s.notices=s.notices.filter(n=>n&&typeof n.id==='string'&&typeof n.title==='string').slice(-30).map(n=>({id:n.id.slice(0,120),age:number(n.age,s.age),title:n.title.slice(0,160),text:String(n.text||'').slice(0,1500),tip:String(n.tip||'').slice(0,700)}));
     s.encounters=s.encounters.filter(n=>n&&get('events',n.id)&&s.npcs.some(p=>p.id===n.npcId&&p.alive)).slice(0,12).map(n=>({id:n.id,npcId:n.npcId}));
     if(s.pending?.npcId&&!s.npcs.some(n=>n.id===s.pending.npcId&&n.alive))s.pending=null;
+    if(s.pending?.id.startsWith('path_')&&!get('events',s.pending.id).choices.some(c=>!choiceReason(s,c)))s.pending=null;
     activateEncounter(s);
+    if(!s.pending&&s.alive)s.pending=LifePaths.candidate(s);
     s.log = s.log.filter(e => e && typeof e === 'object').slice(-800); s.milestones = s.milestones.filter(m => m && typeof m === 'object');
     familyUpdate(s);
     return s;
   }
 
-  return { newLife, migrate, act, actionReason, choiceReason, careerReason, courseReason, socialReason, buyReason, lifestyleReason, budget, stage, occupation, itemValue, costOf, requirements: requirementReason, maxEnergy,activityPreview,effectPreview,eventById:id=>get('events',id),price:Economy.price,salary:Economy.salary,progression:Progression.overview,relationship:Relationships.overview,economy:s=>Economy.summary(s,Data),housingForecast:s=>Economy.forecasts(s,Data),trainingEfficiency:Progression.efficiency, genetics, skillScore: Progression.skillScore };
+  return { newLife, migrate, act, actionReason, choiceReason, careerReason, courseReason, socialReason, buyReason, lifestyleReason, budget, stage, occupation, itemValue, costOf, requirements: requirementReason, maxEnergy,activityPreview,effectPreview,eventById:id=>get('events',id),price:Economy.price,salary:Economy.salary,progression:Progression.overview,relationship:Relationships.overview,economy:s=>Economy.summary(s,Data),housingForecast:s=>Economy.forecasts(s,Data),trainingEfficiency:Progression.efficiency, genetics, skillScore: Progression.skillScore, actions:Data.actions, paths:LifePaths.overview, circle:circleOverview };
 });

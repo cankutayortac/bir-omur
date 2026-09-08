@@ -146,7 +146,7 @@ test('References are contextual, bounded in time and give no money or stat gains
 });
 
 test('Every contextual event has a free fallback; positive consequential options declare time or money', () => {
-  assert.equal(R.events.length, 13);
+  assert.ok(R.events.length >= 16, 'Relationship memories, introductions and personality invitations are registered');
   assert.equal(new Set(R.events.map(e => e.id)).size, R.events.length);
   for (const e of R.events) {
     assert.equal(e.triggeredOnly, true, e.id);

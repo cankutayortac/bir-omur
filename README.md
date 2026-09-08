@@ -1,4 +1,4 @@
-# Bir Ömür · Hayat Elinde — 3.3.1
+# Bir Ömür · Her Hayat Başka — 4.0
 
 Türkçe, karar odaklı yaşam simülatörü. Doğumdan itibaren aile koşullarının, okulun, ilişkilerin, sağlığın ve ekonomik kararların birlikte şekillendirdiği bir hayat.
 
@@ -14,13 +14,29 @@ Türkçe, karar odaklı yaşam simülatörü. Doğumdan itibaren aile koşullar�
 
 ## Oyunun kapsamı
 
-- 81 koşullu olay; altı yıllara yayılan hikâye zinciri ve bağlama uygun NPC karşılaşmaları.
-- 49 aktivite: öğrenme, sosyal yaşam, üretim, çalışma, spor, sağlık ve kişisel bakım; sekiz uzmanlık projesi.
+### 4.0: Hayat yolları
+
+Gelecek → Hayat yolları ekranında araştırma, spor ve müzikte yıllara yayılan bir hedef seçebilirsin. Birden fazla yol açıktır; aynı yılın zamanını paylaşırlar. İlk fırsata hazırlanmak iki ayrı yıl, mesleki aşamaya hazırlanmak yeniden düzenli emek ister. Yaş ilerlediğinde seçtiğin yolun kararları gelir; başarısızlıkta yeniden hazırlanma veya başka bir yaklaşım seçme imkânı vardır. Geç başlayan yetişkinler de katılabilir.
+
+- Bir hedefi sabitle: hayat günlüğünde sıradaki somut adımı gör. Sabitleme, bilgi ve geçmişi okuma kaynak tüketmez.
+- Rota kayıtları; hazırlık yıllarını, seçilen dalı, beklenen gelişmeyi, yol arkadaşını ve geçmiş sonuçları saklar. Yeni kayıtta aynı aşama yeniden ödül vermez.
+- Okul çevreni tanı etkinliğiyle aynı okulda iki sınıf arkadaşı ve bir öğretmenle zaman içinde tanışırsın. Okul değiştiğinde yeni çevre açılır; eski kişiler ve anılar silinmez. İş çevresi de aynı meslekte devam eder.
+- NPC ilgi alanları ve kişilikleri sohbet tepkilerini etkiler. Güven artışındaki küçük kişilik farkı kişi başına yıllık sınırlıdır. Arkadaşlık ve romantizm hâlâ açık seçimdir; öğretmen/mentor ilişkileri romantizme kapalıdır.
+- Uygun tanıdıklar birlikte çalışma/etkinlik önerebilir; rehberler teşvik edebilir. Davetleri reddetmenin cezası yoktur. Davetler arasında bekleme vardır; arayüz bir bildirim yığınına dönüşmez.
+- Üç yolun mesleki kapıları ve işe özgü kararları vardır. Rota projelerinin ücreti, yıllık maaş ve yıl sonu vergi hesabı ayrı tutulur.
+- Gelecekte kazanılan dört kıdem zammı sırasıyla %14, %11, %8, %6'dır. Mevcut maaşlar, başlangıç maaşları ve temel geçim giderleri geriye dönük değiştirilmez.
+
+Sürüm 4.0, kayıt anahtarını değiştirmez (`birOmur.v3`). Eski bir hayata doğumdan kazanılmış rota başarısı eklenmez; mevcut para, özellikler, ilişkiler ve bekleyen karar korunur. Yeni yolları kaldığın yaştan keşfedebilirsin. Fiziksel cihaz kurulumları ayrıca sınanmalıdır.
+
+### Temel sistemler
+
+- 102 koşullu olay; yıllara yayılan hayat yolları, hikâye zincirleri ve bağlama uygun NPC karşılaşmaları.
+- 72 aktivite: öğrenme, sosyal yaşam, üretim, çalışma, spor, sağlık ve kişisel bakım; sekiz uzmanlık projesi ve üç hayat yolu.
 - Zekâ/kuvvet/güzellikte kademeli yavaşlayan gelişim; aynı yıl tekrarında azalan kazanım, sağlık/stres verimi ve onda bir puanlık görünür ilerleme.
 - Anne ve babanın ayrı zekâ/güzellik özelliklerinden rastgele farklılıklarla gelen doğum puanları. Kardeşler ve oyuncunun çocukları da iki ebeveynden etkilenir; genetik başlangıç, gelişim tavanı değildir.
 - Güzellikten bağımsız iletişim becerisi: sohbet, sosyal faaliyet ve deneyim sosyal XP kazandırır. Ücretsiz saç editörü stat üretmez; bakım için zaman ve bazı seçeneklerde ekipman/bütçe gerekir.
 - Araştırma, spor, yaratıcılık ve iletişimde kalıcı XP; altı basamak, sonraki hedef ve proje/meslek kapıları.
-- 17 kariyer, 11 eğitim programı: not, diploma, burs, iş performansı ve terfi.
+- 20 kariyer, 11 eğitim programı: not, diploma, burs, iş performansı ve terfi; proje asistanlığı, kulüp sporculuğu ve stüdyo müzisyenliği.
 - Rastgele ebeveyn meslekleri, gerçek yıllık gelir hesabı ve çocukluk desteği.
 - Bağımsız yaşlanan, iş değiştiren, hastalanan ve ölen NPC'ler; arkadaşlık, yetişkinler arasında ilişki, evlilik, çocuk ve ayrılık.
 - Tanışıklık ve arkadaşlık ayrı; yeni tanışma ve karşılıklı yetişkin ilgisi oyuncunun seçtiği olay pencereleriyle ilerler. Romantik dil nüktedan ve imalıdır, açık cinsel betimleme içermez.
@@ -71,6 +87,7 @@ Testler olay ve veri tutarlılığını, kayıt devamlılığını, ekipman/tük
 - `engine.js`: tarayıcıdan bağımsız, seed ile tekrarlanabilir oyun motoru.
 - `content.js`: aktiviteler, olaylar, eşyalar, eğitim ve kariyer verileri.
 - `progression.js`: kademeli stat gelişimi, uzmanlık XP ve proje basamakları.
+- `lifepaths.js`: üç hayat yolunun aşamaları, dallanan kararları, gecikmiş sonuçları ve hedef takibi.
 - `economy.js`: geçim, gelir/ücret endeksleri, aile desteği, vergi ve borç hesabı.
 - `relationships.js`: güven, hafıza, sözler ve seçimli tanışma/romantizm olayları.
 - `avatar.js`: yaşa ve görünüm seçeneklerine göre SVG karakter çizimi.
@@ -80,6 +97,7 @@ Testler olay ve veri tutarlılığını, kayıt devamlılığını, ekipman/tük
 - `ui.test.js`: gerçek arayüz koduyla olay penceresi ve durum barı regresyon testleri (görsel yerleşim ayrıca tarayıcıda test edilir).
 - `*.test.js`: uzmanlık, ekonomi, NPC hafızası ve gerçek motor akışlarının entegrasyon testleri.
 - `scripts/balance-report.js`: `npm run balance` ile tekrarlanabilir 48 hayat/strateji karşılaştırması; `--baseline` önceki sürümü Git geçmişinden okur.
+- `scripts/path-balance-report.js`: üç yolu doğumdan gerçek eylemlerle ilerleten ayrı, tekrarlanabilir denge denemesi.
 
 Kayıtlar tarayıcıda `birOmur.v3` anahtarıyla saklanır. Arayüz tercihleri `birOmur.ui.v1` anahtarındadır ve hayat dışa aktarımına dahil değildir. Eski kayıt ilk aktarımda `birOmur.backup-v2` anahtarıyla yedeklenir. Hayat arşivi en son sekiz kaydı tutar; daha eski hayatları dosyaya aktarabilirsin. Kayıtlar sunucuya gönderilmez ve cihazlar arasında kendiliğinden eşitlenmez.
 

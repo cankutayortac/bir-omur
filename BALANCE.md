@@ -1,6 +1,16 @@
 # Bir Ömür — denge notları
 
-Ölçüm tarihi: 8 Eylül 2026. Güncel sürüm: 3.3. Bu dosya gelişim ve ekonomi düzeninin tasarım denemelerini kaydeder; uzun vadeli dengenin kusursuz olduğu iddiası değildir. Önceki kariyer borcu denemeleri aşağıda sürümleriyle korunur; yeni genetik başlangıca ait ölçüm olarak kullanılmamalıdır.
+Ölçüm tarihi: 8 Eylül 2026. Güncel sürüm: 4.0. Bu dosya gelişim ve ekonomi düzeninin tasarım denemelerini kaydeder; uzun vadeli dengenin kusursuz olduğu iddiası değildir. Önceki kariyer borcu denemeleri aşağıda sürümleriyle korunur; yeni genetik başlangıca ait ölçüm olarak kullanılmamalıdır.
+
+## 4.0 hayat yolları ve mesleki ekonomi
+
+Başlangıç grupları ücretsizdir. İlk başvuru iki farklı hazırlık yılı gerektirir. Uzmanlaşma sonrasında ilk gelişim yılı takvim kararı açar: odaklı planın ilave anlık zaman maliyeti vardır; dengeli plan daha fazla ayrı gelişim yılı ister. Yetişkinlik görüşmesi 18 yaşından önce başlatılamaz ve sonucu sonraki yılda gelir. Ücretli sonucun ekipman/uzmanlık koşulları karşılanmıyorsa erteleme veya ücretsiz topluma katkı yolu vardır. Rota ödülleri ve sınırlı ek işler maaş değildir; emek geliri olarak alındığı yılda bir kez vergilenir.
+
+Kıdem zamları yeni terfilerde %14 / %11 / %8 / %6 olarak azalır. Dört terfinin birleşik çarpanı eski 1,94 yerine yaklaşık 1,45'tir. Başlangıç maaşları, mevcut kaydedilmiş maaşlar ve temel giderler düşürülmez/yükseltilmez. Bu, yüksek kıdemde sınırsız rahatlamayı azaltmaya yönelik sınırlı bir değişikliktir; her ekonomik yolu eşitleme iddiası değildir.
+
+`node scripts/path-balance-report.js` doğumdan yalnız gerçek motor eylemleriyle üç örnek yaşam çalıştırır. Akademik seed 11, spor seed 29, müzik seed 73; düzenli başlangıç işi, bakım, ekipman alışverişi ve gerçek yıllık zaman bütçesi kullanılır. Bunlar insan oyuncu davranışının temsili veya tüm rastgele başlangıçların garantisi değildir.
+
+Bu üç örnekte profesyonel yol sonucu 19 yaşında açıldı; müzik yolu ilk fırsatta iki kez başarısız olup üçüncü başvuruda ilerledi. 32 yaşına kadar sırasıyla proje asistanı, kulüp sporcusu ve stüdyo müzisyeni işlerine geçildi; 14 / 14 / 10 meslek kararı oynandı. 18 yaş nakitleri 15.480 / 43.727 / 45.759 ₺ idi. 32 yaş nakitleri 4,75 / 4,29 / 3,39 milyon ₺; o yıllardaki daire fiyatları 3,93 / 3,87 / 3,83 milyon ₺ idi. Üçü de aile evinde kaldığından bu birikimler bağımsız kiracı bütçesine genellenemez. Ekipman almadan ortak kaynaklarla ilerleyen müzik/bestecilik alternatifi de ayrı entegrasyon testinde tamamlandı.
 
 ## Amaç ve değişiklikler
 

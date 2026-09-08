@@ -13,4 +13,4 @@ jobs:
         with:
           node-version: '24'
       - run: npm test
-      - run: node --check game.js && node --check sw.js && node --check pwa.js
+      - run: node --check game.js && node --check sw.js && node --check pwa.js && node --check lifepaths.js && node --check relationships.js

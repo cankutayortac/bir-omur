@@ -1,9 +1,11 @@
 (function (root, factory) {
-  const api = factory(typeof module === 'object' && module.exports ? require('./content.js') : root.LifeData);
+  const common = typeof module === 'object' && module.exports;
+  const api = factory(common ? require('./content.js') : root.LifeData, common ? require('./lifepaths.js') : root.LifePaths);
   if (typeof module === 'object' && module.exports) module.exports = api;
   else root.LifeProgression = api;
-})(typeof globalThis !== 'undefined' ? globalThis : this, function (Data) {
+})(typeof globalThis !== 'undefined' ? globalThis : this, function (BaseData, LifePaths) {
   'use strict';
+  const Data={...BaseData,actions:[...BaseData.actions,...LifePaths.actions]};
 
   const CORE = ['knowledge', 'strength', 'charisma'];
   const THRESHOLDS = [0, 40, 140, 330, 680, 1200];

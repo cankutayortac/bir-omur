@@ -1,11 +1,11 @@
 {
   "name": "bir-omur",
-  "version": "3.3.1",
+  "version": "4.0.0",
   "private": true,
   "description": "Türkçe, karar odaklı yaşam simülatörü",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test engine.test.js ui.test.js progression.test.js economy.test.js relationships.test.js integration-story.test.js integration-balance.test.js genetics.test.js preview.test.js",
+    "test": "node --test engine.test.js ui.test.js progression.test.js economy.test.js relationships.test.js integration-story.test.js integration-balance.test.js genetics.test.js preview.test.js lifepaths.test.js personality.test.js path-integration.test.js circles.test.js path-careers.test.js",
     "balance": "node scripts/balance-report.js"
   },
   "engines": { "node": ">=20" }

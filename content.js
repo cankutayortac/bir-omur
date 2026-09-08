@@ -110,6 +110,10 @@
     perform: { creative: 16, social: 6 }, garden: { academic: 3, creative: 4 }, mentor: { social: 10, academic: 4 }, memoir: { creative: 12 }
   };
   for (const action of actions) action.skillXP = actionPractice[action.id] || {};
+  actions.push(
+    {id:'school_circle',name:'Okul çevreni tanı',description:'Sınıfındaki yüzler bir sonraki yıl da orada. İki sınıf arkadaşını ve bir öğretmeni zamanla tanı; arkadaşlık kurup kurmayacağını sen seç.',icon:'🎒',category:'social',minAge:6,maxAge:17,energy:1,perYear:1,requires:{school:true},circle:'school',skillXP:{social:5},effects:{happiness:2}},
+    {id:'work_circle',name:'İş çevrene zaman ayır',description:'Öğle arasında iş arkadaşlarını ve deneyimli bir rehberi tanı. Bu çevre aynı işte kaldığın sürece devam eder.',icon:'☕',category:'work',minAge:18,energy:1,perYear:1,requires:{job:true},circle:'work',skillXP:{social:5},effects:{stress:-2}}
+  );
   actions.find(action => action.id === 'study').effects.grade = 5;
   actions.find(action => action.id === 'library').effects.grade = 1;
   actions.find(action => action.id === 'study_group').effects.grade = 3;
@@ -131,6 +135,18 @@
   );
   items.push({ id: 'care_kit', name: 'Kişisel bakım seti', icon: '🧴', category: 'health', price: 1600, minAge: 12, description: 'Özenli bakım gününü açar. Satın almak tek başına puan kazandırmaz; kullanmak için zaman ayırmalısın.', bonus: {}, conditionLoss: 15, maintenance: 0 });
   careers.push({ id: 'model', name: 'Katalog modeli', icon: '📸', description: 'Yetişkinler için ürün çekimleri. Bakımlı görünümün yanında set iletişimi ve düzenli çalışma gerekir.', salary: 312000, minAge: 18, requires: { stats: { charisma: 65, health: 40 }, skills: { social: 1 } } });
+
+  // Completed professional paths open distinct work, not another generic salary.
+  careers.push(
+    { id: 'project_assistant', name: 'Proje geliştirme asistanı', icon: '🔬', description: 'Araştırma yolunun mesleki finalinden sonra teknik projelerde veri, yöntem ve teslim takibini üstlen. Her proje kendi kararını getirir.', salary: 372000, minAge: 18, requires: { path: { id: 'academic', stage: 'completed', outcome: 'professional' }, skills: { academic: 2 }, stats: { knowledge: 45 } } },
+    { id: 'club_athlete', name: 'Kulüp sporcusu', icon: '🏟️', description: 'Spor yolunun mesleki finalini bir kulüp sözleşmesine dönüştür. Kadro hedefi, antrenman yükü ve sağlığını birlikte yönet.', salary: 336000, minAge: 18, requires: { path: { id: 'athletics', stage: 'completed', outcome: 'professional' }, skills: { athletics: 2 }, stats: { strength: 50, health: 50 } } },
+    { id: 'session_musician', name: 'Stüdyo müzisyeni', icon: '🎧', description: 'Müzik yolunun mesleki finalinden kayıt seanslarına geç. Yaratıcı yorumunu müşteri beklentisi ve çalışma temposuyla dengele.', salary: 360000, minAge: 18, requires: { path: { id: 'music', stage: 'completed', outcome: 'professional' }, skills: { creative: 2 }, items: ['guitar'] } }
+  );
+  actions.push(
+    { id: 'research_commission', name: 'Ücretli projeyi yürüt', description: 'İşindeki küçük bir araştırma teslimini ele al. Çalışmanın ardından yöntem, takvim ve dürüst raporlama hakkında bir karar vereceksin; maaşın yıllık bütçede kalır.', icon: '🔬', category: 'work', minAge: 18, energy: 2, perYear: 1, requires: { job: 'project_assistant' }, skillXP: { academic: 10 }, effects: { knowledge: 2, performance: 3, stress: 4 }, careerEvent: 'career_research_method' },
+    { id: 'club_preparation', name: 'Kulübün hazırlık programına katıl', description: 'Sezonun kritik antrenman dönemini çalış. Ardından kadro hedefiyle bedeninin sınırları arasında seçim yap; garanti başarı yok.', icon: '🏟️', category: 'work', minAge: 18, energy: 2, perYear: 1, requires: { job: 'club_athlete', stats: { health: 35 } }, skillXP: { athletics: 10 }, effects: { strength: 3, performance: 3, health: -1, stress: 3 }, careerEvent: 'career_club_selection' },
+    { id: 'studio_session', name: 'Stüdyo seansını üstlen', description: 'Yeni kaydın hazırlık ve prova kısmını tamamla. Sonra düzenleme, ekip desteği veya ek kayıt teklifi hakkında karar ver.', icon: '🎚️', category: 'work', minAge: 18, energy: 2, perYear: 1, requires: { job: 'session_musician', items: ['guitar'] }, skillXP: { creative: 10, social: 3 }, effects: { performance: 3, happiness: 2, stress: 3 }, careerEvent: 'career_studio_brief' }
+  );
 
   actions.push(
     { id: 'research_notebook', name: 'Araştırma dosyası hazırla', description: 'Bir soruyu kaynak, karşılaştırma ve sonuçla incele. Bir defalık başarı rozeti ve kalıcı araştırma deneyimi kazan.', icon: '🔎', category: 'learning', minAge: 12, energy: 2, perYear: 1, requires: { items: ['book'], stats: { knowledge: 32 }, skills: { academic: 1 } }, skillXP: { academic: 24 }, project: { flag: 'research_dossier', title: 'İlk araştırma dosyan', text: 'Bir merakı somut bir çalışmaya dönüştürdün.' }, effects: { knowledge: 8, grade: 4, stress: 5, flag: 'research_dossier' } },
@@ -488,6 +504,27 @@
       choice('Sevdiğin bir şeyle kendini ödüllendir', 'Bütçene uygun küçük bir keyif günü güzelleştirdi.', { happiness: 6 }, { cost: 500 })
     ], { weight: 1, cooldown: 8 })
   ];
+
+  events.push(
+    event('career_research_method', 'Grafik, beklenen cevabı vermiyor', 'Projenin verileri müşterinin umduğu kadar net değil. Teslim yaklaşırken ekip senden bir yöntem seçmeni bekliyor. Bilimsel belirsizlik takvime bakıp utanmıyor.', '🔬', 18, 110, [
+      choice('Ölçümleri kendin tekrarla · 1 ek zaman', 'Ek bir çalışma turuyla belirsizliğin kaynağını ayırdın. Rapor güçlendi; fakat diğer planlarına ayıracağın zamanı kullandın.', { performance: 8, knowledge: 3, stress: 4 }, { energy: 1 }),
+      choice('Bağımsız kontrol için küçük bir hizmet al', 'Dış kontrol teslimi rahatlattı. Her sorunu tek başına çözmedin; bunun bedelini bütçenden karşıladın.', { performance: 10, knowledge: 1, stress: -2 }, { cost: 2400 }),
+      choice('Kapsamı daralt, belirsizliği açıkça raporla', 'Verinin söylemediğini söylemiş gibi yapmadın. Teslim daha mütevazı kaldı; tüm hedeflerin karşılanmaması biraz gerilim yarattı.', { performance: 2, knowledge: 1, stress: 2 }),
+      choice('Ters çıkan ölçümleri gizle · denetim ve ceza riski', 'Kısa yolu seçtin. Dosyanın nasıl karşılanacağını artık yalnızca sunumun belirlemeyecek.', {}, { chance: { probability: .45, success: { effects: { performance: 8, stress: 6 }, text: 'Bu teslim sorgulanmadan geçti. Kısa vadede performansın arttı ama gizlediğin ölçümler zihnini meşgul etti.' }, failure: { effects: { performance: -18, stress: 10, money: -2000 }, text: 'Kontrol ekibi eksik ölçümleri buldu. Yeniden işleme bedeli ve ciddi performans kaybı oluştu; paran yetmezse masraf borca eklenir.' } } })
+    ], { triggeredOnly: true, requires: { job: 'project_assistant' }, cooldown: 1 }),
+    event('career_club_selection', 'Kadro listesinde bir boşluk', 'Kulüp, yaklaşan yarış veya maç için son hazırlıkları yapıyor. Teknik ekip yükü artırabileceğini söylüyor; bedenin ise bu toplantıya kendi gündemiyle gelmiş.', '🏟️', 18, 110, [
+      choice('Kontrollü ek programa gir · 1 ek zaman', 'Ek yükü planlayarak çalıştın. Kadro hazırlığın güçlendi ama zaman ve yorgunluk bedeli ortadan kalkmadı.', { performance: 8, strength: 2, health: -2, stress: 4 }, { energy: 1 }),
+      choice('Toparlanma desteğine bütçe ayır', 'Profesyonel destek ve daha özenli hazırlıkla toparlandın. Formunu korurken birikiminin bir kısmını kullandın.', { performance: 4, health: 5, stress: -3 }, { cost: 1800 }),
+      choice('Mevcut yükünü koru, ek kadro fırsatını zorlama', 'Antrenörü bilgilendirip sınırını korudun. Bu hafta büyük sıçrama olmadı; bedenin biraz nefes aldı.', { performance: 1, health: 2, stress: -2 }),
+      choice('Sınırlarını zorla · sakatlık riski', 'Kadro fırsatı için daha sert bir programa girdin. Bu riskin sonucu yalnızca ne kadar istekli olduğuna bağlı değildi.', {}, { chance: { probability: .55, success: { effects: { performance: 10, strength: 3, health: -3, stress: 5 }, text: 'Bu kez yükü taşıdın ve hazırlığın öne çıktı. İyi sonuç, bedenine hiçbir bedel ödemediğin anlamına gelmedi.' }, failure: { effects: { performance: -10, health: -12, stress: 7, condition: 'injury' }, text: 'Aşırı yüklenme bir sakatlıkla sonuçlandı. Kadro hedefinden önce tedavi ve toparlanma için zaman ayırman gerekiyor.' } } })
+    ], { triggeredOnly: true, requires: { job: 'club_athlete' }, cooldown: 1 }),
+    event('career_studio_brief', '“Biraz daha başka bir şey”', 'Kayıt hazır olmak üzere. Yapımcı son bir düzenleme istiyor ama “başka bir şey”in nota karşılığı henüz bulunamadı. Seansı nasıl bitireceğine karar vermelisin.', '🎚️', 18, 110, [
+      choice('Kendi düzenlemeni geliştir · 1 ek zaman', 'Fikrini bir deneme kaydına dönüştürdün. İşin içine daha çok kendini kattın; bir başka planından zaman aldın.', { performance: 8, skillXP: { creative: 5 }, happiness: 3, stress: 5 }, { energy: 1 }),
+      choice('Deneyimli bir ses uzmanıyla son rötuşu yap', 'Uzman desteği belirsiz isteği uygulanabilir bir düzenlemeye çevirdi. Seans rahatladı; destek bütçenden karşılandı.', { performance: 6, stress: -3 }, { cost: 1600 }),
+      choice('Onaylanan plana sadık, sade bir teslim yap', 'İstenen temel işi eksiksiz teslim ettin. Yeni bir başyapıt çıkmadı; bu da her iş gününün şartı değildi.', { performance: 2, happiness: -1 }),
+      choice('Aynı gün küçük bir ek kayıt daha al', 'Ek iş için seansı uzattın. Brüt ücret hemen eline geçti; yorgunluk ve yıl sonunda hesaplanacak vergi de işin parçası.', { money: 2500, taxable: true, performance: 4, health: -3, stress: 8 })
+    ], { triggeredOnly: true, requires: { job: 'session_musician' }, cooldown: 1 })
+  );
 
   const data = {
     version: 3,

@@ -6,7 +6,7 @@ const {readFileSync} = require('node:fs');
 const {join} = require('node:path');
 const vm = require('node:vm');
 const E = require('./engine.js');
-const D = require('./content.js');
+const D = {...require('./content.js'),actions:E.actions};
 const A = require('./avatar.js');
 
 const source = readFileSync(join(__dirname, 'game.js'), 'utf8');
@@ -498,7 +498,8 @@ test('Default activity view contains age-appropriate actions, locked reasons and
   const state = atAge(12), ui = app(state);
   ui.click({tab: 'activities'});
   const before = ui.storage.get(KEY);
-  const expected = D.actions.filter(a => state.age >= (a.minAge || 0) && state.age <= (a.maxAge ?? 120)).map(a => a.id);
+  const expected = D.actions.filter(a => (!a.pathId||a.pathStart) && state.age >= (a.minAge || 0) && state.age <= (a.maxAge ?? 120)).map(a => a.id);
+  assert.ok(!inspectedIds(ui.html()).includes('path_music_launch'), 'later path chapters stay out of the ordinary list');
   assert.deepEqual(inspectedIds(ui.html()), expected);
   assert.ok(ui.html().includes(E.actionReason(state, 'read')), 'gear requirement is discoverable without attempting the action');
   assert.ok(ui.html().includes('data-do="toggleFuture" aria-expanded="false"'));
@@ -837,7 +838,7 @@ test('Native activity categories combine with search, ready and favorites withou
   assert.ok(select[0].includes('aria-label="Aktivite kategorisi"'));
   assert.deepEqual([...select[1].matchAll(/<option\b[^>]*value="([^"]+)"/g)].map(m => m[1]), ['all', 'learning', 'social', 'health', 'work', 'creative', 'outdoors']);
   ui.click({activityFilter: 'ready'}); ui.input('kütüphane'); ui.select('learning');
-  assert.deepEqual(inspectedIds(ui.html()), ['library']);
+  assert.deepEqual(inspectedIds(ui.html()), ['library', 'path_academic_start']);
   assert.ok(/aria-pressed="true" data-activity-filter="ready"/.test(ui.html()), 'category change preserves the ready filter');
   assert.ok(ui.html().includes('value="kütüphane"'), 'category change preserves the search query');
   ui.click({activityFilter: 'favorites'});
@@ -855,4 +856,70 @@ test('Native activity categories combine with search, ready and favorites withou
   }
   assert.equal(ui.storage.get(KEY), before, 'category changes never spend time, money or RNG');
   assert.equal(ui.storage.get(UI_KEY), beforePreferences, 'filter changes do not rewrite favorites or other preferences');
+});
+
+test('Three life paths are a quiet in-page future view with persistent stats and no simulation cost',()=>{
+  const ui=app(atAge(12));const before=ui.storage.get(KEY);
+  ui.click({futureView:'paths'});
+  for(const id of ['academic','athletics','music'])assert.ok(ui.html().includes('data-path="'+id+'"'));
+  assertStats(ui.html(),ui.saved());assert.equal(ui.dialog().open,false);
+  assert.equal(ui.storage.get(KEY),before);
+});
+test('Pinning a life path survives reload and never changes stats, cash, time or RNG',()=>{
+  const ui=app(atAge(12));ui.click({futureView:'paths'});
+  const before=ui.saved();ui.click({do:'pinPath',id:'music'});
+  const after=ui.saved();assert.equal(after.lifePaths.pinned,'music');
+  after.lifePaths.pinned=before.lifePaths.pinned;assert.deepEqual(after,before);
+  const reloaded=app(null,ui.storage);assert.ok(reloaded.html().includes('pinned-path'));
+  reloaded.click({do:'pinPath',id:'music'});assert.equal(reloaded.saved().lifePaths.pinned,null);
+});
+test('A route begins in one tap and only meaningful notices or introductions may open',()=>{
+  const ui=app(atAge(12));ui.click({futureView:'paths'});
+  const before=ui.saved();ui.click({do:'activity',id:'path_music_start'});
+  const after=ui.saved();assert.equal(after.year.energy,before.year.energy-1);
+  assert.notEqual(after.lifePaths.routes.music.stage,'idle');
+  assert.ok(after.npcs.length>before.npcs.length);
+  assert.ok(['notice','event'].includes(ui.dialog().dataset.kind));
+  assertStats(ui.dialogHtml(),after);
+});
+test('Path information and favorites remain optional and read-only',()=>{
+  const ui=app(atAge(12));ui.click({futureView:'paths'});const before=ui.storage.get(KEY);
+  ui.click({do:'inspectActivity',id:'path_music_start'});
+  assert.equal(ui.dialog().dataset.kind,'activity-info');assert.ok(!ui.dialogHtml().includes('data-do="activity"'));
+  ui.click({do:'closeDialog'});ui.click({do:'toggleFavorite',id:'path_music_start'});
+  assert.ok(ui.preferences().favorites.includes('path_music_start'));
+  assert.equal(ui.storage.get(KEY),before);
+});
+
+test('Repeat guidance appears only when another activity repetition is actually available', () => {
+  for (const fixture of [{used: 1, energy: 5, available: true}, {used: 2, energy: 5, available: false}, {used: 1, energy: 0, available: false}]) {
+    const state = atAge(12); state.year.used.library = fixture.used; state.year.energy = fixture.energy;
+    const ui = app(state, preferencesStorage({favorites: ['library']}));
+    ui.click({tab: 'activities'}); ui.click({activityFilter: 'favorites'});
+    const card = ui.html().match(/<button\b[^>]*data-do="activity" data-id="library"[^>]*>[\s\S]*?<\/button>/)?.[0];
+    assert.ok(card, 'favorite activity is visible even when locked');
+    assert.equal(card.includes('class="practice-note"'), fixture.available);
+    assert.equal(card.includes('daha düşük kazanım'), fixture.available);
+    assert.equal(/\sdisabled(?:\s|>)/.test(card), !fixture.available);
+    if (!fixture.available) assert.ok(card.includes(E.actionReason(ui.saved(), 'library')), 'the actual locking reason remains visible');
+  }
+});
+
+test('Path timing distinguishes another practice year or adult action unlock from a scheduled story', () => {
+  const fixtures = [
+    {age: 12, record: {stage: 'preparation', startedAge: 10, practiceYears: [12]}, timing: '13 yaşında hazırlığa devam edebilirsin.'},
+    {age: 16, record: {stage: 'development', startedAge: 10, branch: 'research', specializedAge: 13, checkpointDone: true, tempo: 'balanced', developmentYears: [15, 16]}, timing: '17 yaşında sonraki adım açılır.'},
+    {age: 16, record: {stage: 'development', startedAge: 10, branch: 'research', specializedAge: 13, checkpointDone: true, tempo: 'focused', developmentYears: [14, 15]}, timing: '18 yaşında sonraki adım açılır.'},
+    {age: 12, record: {stage: 'opportunity', startedAge: 10, practiceYears: [11, 12], submittedAge: 12, dueAge: 13}, timing: '13 yaşında yeni bir gelişme bekleniyor.'}
+  ];
+  for (const fixture of fixtures) {
+    const state = atAge(fixture.age);
+    Object.assign(state.lifePaths.routes.academic, fixture.record);
+    const ui = app(state); ui.click({futureView: 'paths'});
+    const card = ui.html().match(/<article\b[^>]*data-path="academic"[^>]*>[\s\S]*?<\/article>/)?.[0];
+    assert.ok(card, 'academic path card is visible');
+    assert.ok(card.includes('<small>' + fixture.timing + '</small>'), fixture.timing);
+    if (fixture.record.stage !== 'opportunity') assert.ok(!card.includes('yeni bir gelişme bekleniyor.'), 'preparation does not promise an automatic event');
+    assert.equal(ui.dialog().open, false, 'a future opportunity does not open an early popup');
+  }
 });
