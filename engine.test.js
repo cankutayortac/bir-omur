@@ -5,7 +5,7 @@ const E = require('./engine.js');
 const D = require('./content.js');
 const A = require('./avatar.js');
 const fresh = (age=0,seed=42) => {const s=E.newLife({name:'Test',gender:'male',seed});s.age=age;s.year.maxEnergy=8;s.year.energy=8;return s;};
-function resolve(s) { if(!s.pending)return; const event=D.events.find(e=>e.id===s.pending.id);const i=event.choices.findIndex(c=>!E.choiceReason(s,c));assert.ok(i>=0,'Every event has a possible choice');assert.equal(E.act(s,'choice',{index:i}).ok,true); }
+function resolve(s) { for(let attempts=0;s.pending&&attempts<30;attempts++){const event=E.eventById(s.pending.id);const i=event.choices.findIndex(c=>!E.choiceReason(s,c));assert.ok(i>=0,'Every event has a possible choice');assert.equal(E.act(s,'choice',{index:i}).ok,true);}assert.equal(s.pending,null); }
 test('Life generation and choices are deterministic with a saved seed',()=>{
   const a=E.newLife({name:'Deniz',gender:'random',seed:183}),b=E.newLife({name:'Deniz',gender:'random',seed:183});assert.deepEqual(a,b);
   E.act(a,'age');E.act(b,'age');assert.deepEqual(a,b);resolve(a);resolve(b);assert.deepEqual(a,b);
@@ -65,6 +65,8 @@ test('Degree requirements, graduation and eligible career application',()=>{
   for(let y=0;y<c.duration;y++){resolve(s);E.act(s,'age');}
   resolve(s);assert.ok(s.education.degrees.includes(c.degree));assert.equal(s.education.courseId,null);
   const career=D.careers.find(c=>[].concat(c.requires?.degree||c.degree||[]).includes('software'));assert.ok(career);
+  assert.match(E.careerReason(s,career),/uzmanlık/,'Diploma does not replace applied experience');
+  s.progression.tracks.academic.xp=140;
   assert.equal(E.careerReason(s,career),'');
 });
 test('Chronic conditions need management; low health and old age end life',()=>{
@@ -89,7 +91,8 @@ test('24 autonomous complete lives have valid events, bounded stats and finite b
         const priorities=s.stats.health<60?['doctor','public_clinic','rest','walk']:s.stats.stress>40?['rest','meditate','walk']:s.age<18?['study','library','socialize','walk']:['overtime','walk','socialize','rest'];
         const activity=priorities.map(id=>pool.find(a=>a.id===id)).find(Boolean)||pool[0];E.act(s,'activity',{id:activity.id});
       }
-      E.act(s,'age');
+      resolve(s);
+      if(s.alive)assert.equal(E.act(s,'age').ok,true,'Resolve activity encounters before advancing the year');
       for(const [key,value]of Object.entries(s.stats))assert.ok(Number.isFinite(value)&&value>=0&&value<=100,key);
       assert.ok(Number.isFinite(s.money)&&s.money>=0);assert.ok(Number.isFinite(s.debt)&&s.debt>=0);assert.ok(s.year.energy>=0);
     }
@@ -99,4 +102,30 @@ test('24 autonomous complete lives have valid events, bounded stats and finite b
 test('Avatar renders age and appearance variants without injectable attributes',()=>{
   for(const age of [0,5,14,25,55,80])for(const hair of ['short','wave','long','buzz','bald'])assert.match(A.render({age,appearance:{hair}}),/^<svg/);
   assert.ok(!A.render({name:'<script>x</script>',appearance:{color:'"><script>x</script>'}}).includes('<script>'));
+});
+
+test('Activity preview matches clamped fractional stats and captured XP on repeated practice',()=>{
+  const s=fresh(25);s.stats={knowledge:82.4,strength:59.9,charisma:75.2,health:99,happiness:98,stress:1};s.money=100000;
+  for(const id of ['rest','walk','walk']){
+    const a=D.actions.find(a=>a.id===id),before={...s.stats},xpBefore=Object.fromEntries(E.progression(s).map(t=>[t.id,t.xp]));
+    const raw=JSON.stringify(s),preview=E.activityPreview(s,a);assert.equal(JSON.stringify(s),raw,'Preview must not mutate');
+    assert.equal(E.act(s,'activity',{id}).ok,true);
+    for(const [key,value]of Object.entries(before))assert.equal(Math.round((s.stats[key]-value)*10)/10,preview.effects[key]||0,key);
+    for(const t of E.progression(s))assert.equal(Math.round((t.xp-xpBefore[t.id])*10)/10,preview.xp[t.id]||0,t.id);
+    resolve(s);
+  }
+});
+
+test('Event preview matches actual current-level gains and health/stress caps',()=>{
+  const s=fresh(6),event=D.events.find(e=>e.id==='first_food')||D.events.find(e=>e.choices.some(c=>c.effects?.knowledge&&!c.chance&&!c.requires&&!c.cost));
+  const index=event.choices.findIndex(c=>c.effects?.knowledge&&!c.chance&&!c.requires&&!c.cost),choice=event.choices[index];
+  s.stats.health=99;s.stats.stress=1;s.stats.knowledge=95;s.pending={id:event.id};
+  const before={...s.stats},preview=E.effectPreview(s,choice.effects);assert.equal(E.act(s,'choice',{index}).ok,true);
+  for(const [key,value]of Object.entries(before))assert.equal(Math.round((s.stats[key]-value)*10)/10,preview[key]||0,key);
+});
+
+test('Late school enrollment cannot bypass its annual opportunity cost',()=>{
+  const s=fresh(18);s.education.grade=95;s.stats.knowledge=80;s.year.maxEnergy=E.maxEnergy(s);s.year.energy=1;
+  const raw=JSON.stringify(s);assert.equal(E.act(s,'enroll',{id:D.courses[0].id}).ok,false);assert.equal(JSON.stringify(s),raw);
+  s.year.energy=8;assert.equal(E.act(s,'enroll',{id:D.courses[0].id}).ok,true);assert.equal(s.year.maxEnergy,6);assert.equal(s.year.energy,5);
 });

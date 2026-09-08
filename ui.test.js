@@ -125,7 +125,8 @@ function withPending(seed = 42) {
   return state;
 }
 function possibleChoice(state) {
-  const event = D.events.find(e => e.id === state.pending.id);
+  const event = E.eventById(state.pending.id);
+  assert.ok(event, 'engine resolves annual and NPC-specific event definitions');
   const index = event.choices.findIndex(c => !E.choiceReason(state, c));
   assert.ok(index >= 0);
   return index;
@@ -137,7 +138,8 @@ function assertStats(markup, state) {
     const start = markup.lastIndexOf('<', index), next = markup.indexOf('data-stat="', index + marker.length);
     const region = markup.slice(start, next < 0 ? undefined : markup.lastIndexOf('<', next));
     assert.ok(/role="progressbar"/.test(region), key + ' has progress semantics');
-    assert.ok(new RegExp('aria-valuenow="' + Math.round(state.stats[key]) + '"').test(region), key + ' shows current value');
+    const displayed = Math.max(0, Math.min(100, Math.round(state.stats[key] * 10) / 10));
+    assert.ok(region.includes('aria-valuenow="' + displayed + '"'), key + ' shows current value, including fractional progress');
   }
 }
 function assertEvent(ui, state) {
@@ -148,6 +150,24 @@ function assertEvent(ui, state) {
   const header = ui.dialogHtml().match(/<header\b[^>]*class="[^"]*dialog-header[^"]*"[^>]*>([\s\S]*?)<\/header>/);
   assert.ok(header, 'event has its own fixed header');
   assertStats(header[1], state);
+}
+function assertNotice(ui, state) {
+  assert.equal(ui.dialog().open, true);
+  assert.equal(ui.dialog().dataset.kind, 'notice');
+  assert.ok(/id="dialogTitle"/.test(ui.dialogHtml()), 'notice has an accessible title');
+  assert.ok(/data-do="ackNotice"/.test(ui.dialogHtml()), 'notice has a distinct acknowledgement action');
+  assert.ok(!/data-do="choice"/.test(ui.dialogHtml()), 'informational notice does not impersonate the pending decision');
+  const header = ui.dialogHtml().match(/<header\b[^>]*class="[^"]*dialog-header[^"]*"[^>]*>([\s\S]*?)<\/header>/);
+  assert.ok(header, 'notice keeps the status bars in its fixed header');
+  assertStats(header[1], state);
+}
+function withNotices() {
+  const state = withPending();
+  state.notices = [
+    {id: 'ui-notice-a', age: state.age, title: 'Bir beceride ilk adım', text: 'Emeklerinin sonucunu görüyorsun.', tip: 'Gelişim ekranını incele.'},
+    {id: 'ui-notice-b', age: state.age, title: 'Ailende yeni bir sayfa', text: 'Bir yakınından haber var.', tip: 'İlişkiler ekranını incele.'}
+  ];
+  return state;
 }
 
 test('Saved pending event opens automatically with all current stats in its popup', () => {
@@ -247,4 +267,165 @@ test('NPC actions refresh the popup stats without resetting its long-menu scroll
   assertStats(ui.html(), expected);
   assertStats(ui.dialogHtml(), expected);
   assert.ok(ui.dialogHtml().includes('id="dialogFeedback"'), 'popup includes its own feedback region');
+});
+
+test('Fractional training progress stays visible in the dock and every popup stat bar', () => {
+  const state = withPending();
+  state.stats = {knowledge: 21.37, strength: 40.05, charisma: 35.64, health: 88.3, happiness: 74.8, stress: 16.26};
+  const ui = app(state);
+  assertStats(ui.html(), state);
+  assertEvent(ui, state);
+  assert.ok(ui.dialogHtml().includes('aria-valuenow="21.4"'));
+  assert.ok(ui.dialogHtml().includes('aria-valuenow="35.6"'));
+  ui.click({do: 'closeDialog'});
+  ui.click({do: 'settings'});
+  assertStats(ui.dialogHtml(), state);
+});
+
+test('Notice queue opens before an annual event and acknowledgement preserves the decision and stats', () => {
+  const state = withNotices(), ui = app(state);
+  assertNotice(ui, state);
+  assert.deepEqual(ui.saved().pending, state.pending);
+  for (let turn = 0; ui.saved().notices.length && turn < state.notices.length; turn++) {
+    const previousCount = ui.saved().notices.length;
+    assertNotice(ui, state);
+    ui.click({do: 'ackNotice'});
+    const updated = ui.saved();
+    assert.ok(updated.notices.length < previousCount, 'acknowledgement removes only displayed information from the queue');
+    assert.deepEqual(updated.pending, state.pending, 'acknowledging a milestone does not choose an event response');
+    assert.deepEqual(updated.stats, state.stats);
+    assert.equal(updated.money, state.money); assert.equal(updated.age, state.age); assert.equal(updated.rng, state.rng);
+  }
+  assert.equal(ui.saved().notices.length, 0);
+  assertEvent(ui, state);
+  const beforeDuplicate = ui.storage.get(KEY);
+  ui.click({do: 'ackNotice'});
+  assert.deepEqual(ui.saved().pending, state.pending, 'a stale notice click cannot dismiss the actual decision');
+  assert.deepEqual(ui.saved().stats, state.stats);
+  assert.equal(ui.storage.get(KEY), beforeDuplicate);
+  assertEvent(ui, state);
+});
+
+test('A genuinely unread notice survives reload and still precedes its pending event', () => {
+  const state = withNotices(), ui = app(state);
+  assertNotice(ui, state);
+  // Reload without clicking X, Escape or Continue: all three acknowledge a notice.
+  assert.deepEqual(ui.saved().notices, state.notices);
+  const before = ui.storage.get(KEY);
+  const reloaded = app(null, ui.storage);
+  assertNotice(reloaded, state);
+  assert.deepEqual(reloaded.saved().pending, state.pending);
+  assert.equal(reloaded.storage.get(KEY), before);
+});
+
+test('Importing the same notice queue clears seen state and shows its information again', async () => {
+  const imported = withNotices(), ui = app(imported);
+  assertNotice(ui, imported);
+  ui.click({do: 'closeDialog'}); ui.click({do: 'settings'});
+  await ui.importSave(imported);
+  assertNotice(ui, imported);
+  assert.deepEqual(ui.saved().pending, imported.pending);
+  assert.deepEqual(ui.saved().notices, imported.notices);
+});
+
+test('X and Escape acknowledge up to three notice cards before returning to the pending decision', async () => {
+  const state = withNotices();
+  state.notices.push(...[3, 4, 5].map(i => ({id: 'ui-notice-' + i, age: state.age, title: 'Gelişme ' + i, text: 'Yeni bir bilgi.', tip: ''})));
+  const ui = app(state);
+  assertNotice(ui, state);
+  assert.equal((ui.dialogHtml().match(/class="story-note"/g) || []).length, 3);
+  ui.click({do: 'closeDialog'});
+  assert.equal(ui.saved().notices.length, 2);
+  assertNotice(ui, state);
+  assert.equal((ui.dialogHtml().match(/class="story-note"/g) || []).length, 2);
+  let prevented = false;
+  await ui.dialog().emit('cancel', {preventDefault() {prevented = true;}});
+  assert.equal(prevented, true, 'native Escape cancellation is handled as acknowledgement');
+  assert.equal(ui.saved().notices.length, 0);
+  assert.deepEqual(ui.saved().pending, state.pending);
+  assert.deepEqual(ui.saved().stats, state.stats);
+  assertEvent(ui, state);
+});
+
+test('NPC encounter definitions outside LifeData events render and resolve through the engine registry', () => {
+  const state = fresh(); state.age = 12; state.year.energy = state.year.maxEnergy = E.maxEnergy(state);
+  const npc = {id: 'ui-acquaintance', name: 'Ada & Ece', role: 'acquaintance', contextRole: 'classmate', gender: 'female', age: 12, alive: true, health: 95, bond: 42, income: 0, job: 'Öğrenci', personality: 'Sıcakkanlı'};
+  state.npcs.push(npc); state.flags.npcCounter++;
+  state.pending = {id: 'relationship_meet_child', npcId: npc.id};
+  assert.equal(D.events.some(event => event.id === state.pending.id), false, 'fixture exercises the separate NPC event registry');
+  assert.ok(E.eventById(state.pending.id));
+  const ui = app(state);
+  assertEvent(ui, state);
+  assert.ok(ui.dialogHtml().includes('Ada &amp; Ece'), 'NPC context is substituted and escaped');
+  const index = possibleChoice(E.migrate(JSON.parse(JSON.stringify(state))));
+  const expected = E.migrate(JSON.parse(JSON.stringify(state)));
+  assert.equal(E.act(expected, 'choice', {index}).ok, true);
+  ui.click({do: 'choice', index: String(index)});
+  assert.equal(ui.saved().pending, expected.pending);
+  assert.deepEqual(ui.saved().stats, expected.stats);
+  assert.equal(ui.saved().npcs.find(n => n.id === npc.id).role, expected.npcs.find(n => n.id === npc.id).role);
+  assertStats(ui.html(), expected);
+});
+
+function adultWithContact(role = 'friend') {
+  const state = fresh(); state.age = 24; state.money = 120000; state.notices = []; state.pending = null;
+  state.stats.charisma = 75; state.year.energy = state.year.maxEnergy = E.maxEnergy(state); state.rng = 0;
+  const contact = {id: 'ui-adult-contact', name: 'Ada', gender: 'female', age: 25, role, alive: true, health: 95, bond: 88, trust: 80, income: 360000, job: 'Tasarımcı', personality: 'Sıcakkanlı', partnerSince: 20};
+  state.npcs.push(contact); state.flags.npcCounter++;
+  return {state, contact};
+}
+
+test('A social action cannot replace its newly opened romantic encounter with the NPC menu', () => {
+  const {state, contact} = adultWithContact(), ui = app(state);
+  ui.click({do: 'person', id: contact.id});
+  assert.equal(ui.dialog().dataset.kind, 'general');
+  ui.click({social: 'flirt', id: contact.id});
+  const updated = ui.saved();
+  assert.equal(updated.pending?.id, 'relationship_romantic_invitation');
+  assertEvent(ui, updated);
+  assert.ok(ui.dialogHtml().includes('Kahvenin bahanesi kalmadı'));
+});
+
+test('A marriage milestone stays visible instead of being overwritten by the NPC menu', () => {
+  const {state, contact} = adultWithContact('partner'), ui = app(state);
+  ui.click({do: 'person', id: contact.id});
+  ui.click({social: 'marry', id: contact.id});
+  const updated = ui.saved();
+  assert.equal(updated.npcs.find(n => n.id === contact.id).role, 'spouse');
+  assert.ok(updated.notices.length > 0);
+  assertNotice(ui, updated);
+  assert.ok(ui.dialogHtml().includes('bütçe de şahit'));
+});
+
+test('Progress and project UI renders four specialist tracks with accessible XP and next unlocks', () => {
+  const {state} = adultWithContact(); state.progression.tracks.academic.xp = 95.5;
+  const ui = app(state);
+  ui.click({tab: 'activities'}); ui.click({activityView: 'progress'});
+  const markup = ui.html();
+  assert.ok(markup.includes('Bir puandan daha fazlası.'));
+  const tracks = E.progression(state);
+  assert.equal((markup.match(/class="card pad skill-card"/g) || []).length, tracks.length);
+  for (const track of tracks) {
+    assert.ok(markup.includes('aria-label="' + track.name + ' uzmanlık ilerlemesi"'));
+    assert.ok(markup.includes(track.tierName));
+  }
+  for (const project of D.actions.filter(a => a.project)) assert.ok(markup.includes('data-id="' + project.id + '"'), project.name + ' is discoverable');
+  assert.ok(markup.includes('95,5'), 'fractional specialist XP is visible');
+  assert.ok(!/NaN|undefined/.test(markup));
+  assertStats(markup, state);
+});
+
+test('Budget UI exposes the economy, family pool, side-income tax and debt principal separately', () => {
+  const {state} = adultWithContact();
+  state.money = 50000; state.debt = 80000; state.city = 'İstanbul';
+  state.job = {id: 'technician', salary: 384000, level: 1, years: 0, performance: 55};
+  state.year.income = state.year.taxableIncome = 9000;
+  const ui = app(state);
+  ui.click({tab: 'assets'}); ui.click({assetsTab: 'budget'});
+  const markup = ui.html();
+  for (const text of ['Paranın da bir hikâyesi var.', 'Fiyat değişimi', 'Ücret değişimi', 'Ek gelirin yıl sonunda ödenecek vergisi', 'Otomatik anapara ödemesi', 'Ailenin destek kapasitesi', 'Taşınmadan önce hesabını yap.']) assert.ok(markup.includes(text), text);
+  assert.ok(markup.includes('class="family-budget"')); assert.ok(markup.includes('class="housing-grid"'));
+  for (const forecast of E.housingForecast(state)) assert.ok(markup.includes(forecast.label));
+  assert.ok(!/NaN|undefined/.test(markup));
+  assertStats(markup, state);
 });

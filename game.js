@@ -6,8 +6,10 @@
   const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   const money = n => new Intl.NumberFormat('tr-TR', {style:'currency',currency:'TRY',maximumFractionDigits:0}).format(Number.isFinite(n) ? n : 0);
   const num = n => Math.round(Number.isFinite(n) ? n : 0).toLocaleString('tr-TR');
+  const point = n => (Number.isFinite(n)?n:0).toLocaleString('tr-TR',{maximumFractionDigits:1});
+  const price = n => E.price(state,n), wage = n => E.salary(state,n);
   const statNames = {knowledge:'Bilgi',strength:'Kuvvet',charisma:'Karizma',happiness:'Mutluluk',health:'Sağlık',stress:'Stres',grade:'Okul başarısı',performance:'İş performansı',reputation:'İtibar'};
-  const roleNames = {mother:'Anne',father:'Baba',friend:'Arkadaş',classmate:'Okul arkadaşı',colleague:'İş arkadaşı',mentor:'Mentor',partner:'Partner',spouse:'Eş',child:'Çocuk'};
+  const roleNames = {mother:'Anne',father:'Baba',sibling:'Kardeş',acquaintance:'Tanıdık',friend:'Arkadaş',classmate:'Okul arkadaşı',colleague:'İş arkadaşı',mentor:'Mentor',partner:'Partner',spouse:'Eş',child:'Çocuk',ex:'Eski partner'};
   const schoolNames = {none:'Henüz okula başlamadı',primary:'İlkokul',middle:'Ortaokul',high:'Lise',graduate:'Lise mezunu',university:'Üniversite',vocational:'Mesleki eğitim'};
   const tabs = [{id:'life',name:'Hayat',icon:'sprout'},{id:'activities',name:'Aktiviteler',icon:'compass'},{id:'people',name:'İlişkiler',icon:'people'},{id:'future',name:'Gelecek',icon:'briefcase'},{id:'assets',name:'Varlıklar',icon:'wallet'},{id:'health',name:'Sağlık',icon:'heart'}];
   const categories = {all:'Tümü',learning:'Öğrenme',social:'Sosyal',health:'İyi oluş',work:'İş & gelir',creative:'Yaratıcılık',outdoors:'Hareket'};
@@ -26,7 +28,7 @@
   };
   const icon = (id) => '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+(paths[id]||paths.star)+'"/></svg>';
   let state = null, tab = 'life', category = 'all', assetTab = 'shop', peopleFilter = 'all', journalLimit = 12, result = '', toastTimer, storageOK = true;
-  let lastStatChanges = {}, seenEventKey = '', dialogReturnFocus = null, skipDialogFocus = false;
+  let lastStatChanges = {}, seenEventKey = '', seenNoticeKey='',activityView='actions',dialogReturnFocus = null, skipDialogFocus = false;
   const dockObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(updateDockSize) : null;
   const KEY = 'birOmur.v3';
   let notice = '';
@@ -56,12 +58,12 @@
       const before = {...state.stats};
       const response = E.act(state, type, payload);
       if (!response.ok) { toast(response.message || 'Bu işlem şu an yapılamıyor.'); return response; }
-      lastStatChanges = Object.fromEntries(Object.keys(state.stats).map(k => [k, Math.round(state.stats[k]) - Math.round(before[k])]).filter(([,v]) => v));
+      if(type!=='ackNotice')lastStatChanges = Object.fromEntries(Object.keys(state.stats).map(k => [k, Math.round((state.stats[k]-before[k])*10)/10]).filter(([,v]) => v));
       if (type === 'choice' || type === 'activity' || type === 'social') result = response.message || '';
       if (type === 'age') { tab = 'life'; result = ''; }
-      if (type === 'choice') closeDialog(false);
+      if (type === 'choice' || type==='ackNotice') closeDialog(false);
       save(); render();
-      $('#statFeedback').textContent = Object.entries(lastStatChanges).map(([k,v]) => statNames[k]+' '+Math.abs(v)+(v>0?' arttı':' azaldı')+', şimdi '+num(state.stats[k])).join('. ');
+      $('#statFeedback').textContent = Object.entries(lastStatChanges).map(([k,v]) => statNames[k]+' '+point(Math.abs(v))+(v>0?' arttı':' azaldı')+', şimdi '+point(state.stats[k])).join('. ');
       if (response.message && !(type === 'age' && state.pending)) toast(response.message);
       return response;
     } catch (error) { console.error(error); toast('İşlem tamamlanamadı; kaydın korunuyor.'); return {ok:false}; }
@@ -90,7 +92,7 @@
   function annualBudget() { try { return E.budget(state); } catch { return {income:0,expenses:0,tax:0,net:0,breakdown:[]}; } }
   function sidebar() {
     const b=annualBudget(), next=nextGoal();
-    return '<aside class="right-column">'+energyPanel()+'<section class="card"><div class="row between"><h3>Yılın hesabı</h3>'+icon('wallet')+'</div><p class="helper-text">Gelecek yaşında uygulanacak bütçe</p><div class="budget-row"><span>Yıllık gelir</span><b>'+money(b.income)+'</b></div><div class="budget-row"><span>Gider + vergi</span><b>'+money(b.expenses)+'</b></div><div class="budget-row total"><span>Yıl sonu farkı</span>'+moneyPill(b.net)+'</div>'+(state.debt>0?'<div class="budget-row"><span>Mevcut borç</span><b class="negative">'+money(state.debt)+'</b></div>':'')+'<button class="text-link" data-tab="assets">Bütçenin detayları</button></section><section class="card"><div class="row between"><h3>Ufukta ne var?</h3>'+icon('compass')+'</div><div class="goal-row"><span class="goal-symbol">'+icon('star')+'</span><div><b>'+esc(next.title)+'</b><p>'+esc(next.text)+'</p></div></div><div class="goal-row"><span class="goal-symbol">'+icon('people')+'</span><div><b>Bağlarını canlı tut</b><p>'+esc(state.npcs.filter(n=>n.alive&&n.bond>=60).length)+' kişiyle güçlü bir bağın var.</p></div></div></section><div class="quote">“Hayat, başka planlar yaparken biriktirdiğin küçük anlardır.”<small>BİR ÖMÜR · HAYAT DEFTERİ</small></div></aside>';
+    return '<aside class="right-column">'+energyPanel()+'<section class="card"><div class="row between"><h3>Yılın hesabı</h3>'+icon('wallet')+'</div><p class="helper-text">Gelecek yaşında uygulanacak bütçe</p><div class="budget-row"><span>Yıllık gelir</span><b>'+money(b.income)+'</b></div><div class="budget-row"><span>Gider + vergi</span><b>'+money(b.expenses)+'</b></div><div class="budget-row total"><span>Borç ödemesi sonrası fark</span>'+moneyPill(b.netAfterDebt)+'</div>'+(state.debt>0?'<div class="budget-row"><span>Mevcut borç</span><b class="negative">'+money(state.debt)+'</b></div>':'')+'<button class="text-link" data-tab="assets" data-assets-tab="budget">Bütçenin detayları</button></section><section class="card"><div class="row between"><h3>Ufukta ne var?</h3>'+icon('compass')+'</div><div class="goal-row"><span class="goal-symbol">'+icon('star')+'</span><div><b>'+esc(next.title)+'</b><p>'+esc(next.text)+'</p></div></div><div class="goal-row"><span class="goal-symbol">'+icon('people')+'</span><div><b>Bağlarını canlı tut</b><p>'+esc(state.npcs.filter(n=>n.alive&&n.bond>=60).length)+' kişiyle güçlü bir bağın var.</p></div></div></section><div class="quote">“Hayat, başka planlar yaparken biriktirdiğin küçük anlardır.”<small>BİR ÖMÜR · HAYAT DEFTERİ</small></div></aside>';
   }
   function nextGoal() {
     if (!state.alive) return {title:'Yeni bir ihtimal',text:'Başka bir ailede, bambaşka bir hayat seni bekliyor.'};
@@ -105,9 +107,9 @@
   function section(title,sub='',right='') {return '<div class="section-title"><div><h2>'+title+'</h2>'+(sub?'<p>'+sub+'</p>':'')+'</div>'+right+'</div>';}
   function stats() {
     return '<section class="stats-grid compact-stats" aria-label="Karakter özellikleri">'+['health','happiness','knowledge','strength','charisma','stress'].map(k=>{
-      const value=Math.max(0,Math.min(100,Math.round(state.stats[k]))), change=lastStatChanges[k]||0;
+      const value=Math.max(0,Math.min(100,Math.round(state.stats[k]*10)/10)), change=lastStatChanges[k]||0;
       const good=k==='stress'?change<0:change>0;
-      return '<div class="stat" data-stat="'+k+'" title="'+statNames[k]+': '+value+' / 100'+(k==='stress'?'. Düşük stres daha iyidir.':'')+'"><div class="stat-header"><span>'+statNames[k]+'</span><span class="stat-value"><b>'+value+'</b>'+(change?'<small class="stat-delta '+(good?'positive':'negative')+'" aria-label="Son eylem: '+Math.abs(change)+(change>0?' artış':' azalış')+'">'+(change>0?'+':'')+change+'</small>':'')+'</span></div><div class="meter" role="progressbar" aria-label="'+statNames[k]+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+value+'"><i style="width:'+value+'%"></i></div></div>';
+      return '<div class="stat" data-stat="'+k+'" title="'+statNames[k]+': '+point(value)+' / 100'+(k==='stress'?'. Düşük stres daha iyidir.':'')+'"><div class="stat-header"><span>'+statNames[k]+'</span><span class="stat-value"><b>'+point(value)+'</b>'+(change?'<small class="stat-delta '+(good?'positive':'negative')+'" aria-label="Son eylem: '+point(Math.abs(change))+(change>0?' artış':' azalış')+'">'+(change>0?'+':'')+point(change)+'</small>':'')+'</span></div><div class="meter" role="progressbar" aria-label="'+statNames[k]+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+value+'"><i style="width:'+value+'%"></i></div></div>';
     }).join('')+'</section>';
   }
   function statusContext() {return '<div class="status-context"><span>GÜNCEL DURUMUN'+(Object.keys(lastStatChanges).length?' <small>· Son eylem ±</small>':'')+'</span><span>'+state.age+' yaş <b>'+money(state.money)+'</b></span></div>';}
@@ -118,24 +120,25 @@
   }
   function effectsText(e={}) {
     const entries=Object.entries(e.stats||{}).concat(Object.entries(e).filter(([k,v])=>statNames[k]&&typeof v==='number'));
-    const parts=entries.map(([k,v])=>(v>0?'+':'')+v+' '+statNames[k]);
+    const parts=entries.filter(([,v])=>v).map(([k,v])=>(v>0?'+':'')+point(v)+' '+statNames[k]);
     if(e.money)parts.push((e.money>0?'+':'')+money(e.money));
     if(e.bond)parts.push((e.bond>0?'+':'')+e.bond+' ilişki');
     return [...new Set(parts)].slice(0,4).join(' · ');
   }
   function pendingEvent() {
     if (!state.pending) return '';
-    const ev=D.events.find(e=>e.id===state.pending.id) || state.pending;
+    const ev=E.eventById(state.pending.id) || state.pending;
     const npc=state.npcs.find(n=>n.id===state.pending.npcId);
     const fill = text => esc(String(text||'').replaceAll('{name}',state.name).replaceAll('{npc}',npc?.name||'Bir tanıdığın').replaceAll('{age}',state.age));
     return '<section class="event-card" aria-labelledby="eventTitle"><div class="event-top"><span class="event-icon">'+esc(ev.icon||'✦')+'</span><div><span class="eyebrow">HAYATINDAN BİR AN · KARAR SENİN</span><h2 id="eventTitle">'+fill(ev.title)+'</h2></div></div><div class="event-body"><p>'+fill(ev.description||ev.text)+'</p><div class="choice-list">'+(ev.choices||[]).map((c,i)=>{
       const reason=E.choiceReason(state,c);
-      return '<button class="event-choice" data-do="choice" data-index="'+i+'" '+(reason?'disabled':'')+'><span class="choice-letter">'+String.fromCharCode(65+i)+'</span><span class="grow"><b>'+fill(c.label||c.text)+'</b><small>'+esc(reason||(c.cost?money(c.cost)+' · ':'')+(c.chance?'Sonuç özelliklerine ve şansa bağlı.':effectsText(c.effects)||'Bu karar hikâyende bir iz bırakacak.'))+'</small></span>'+icon(reason?'lock':'chevron')+'</button>';
+      return '<button class="event-choice" data-do="choice" data-index="'+i+'" '+(reason?'disabled':'')+'><span class="choice-letter">'+String.fromCharCode(65+i)+'</span><span class="grow"><b>'+fill(c.label||c.text)+'</b><small>'+esc(reason||(c.energy?c.energy+' zaman · ':'')+(c.cost?money(E.costOf(state,c))+' · ':'')+(c.chance?'Sonuç özelliklerine ve şansa bağlı.':effectsText(E.effectPreview(state,c.effects||{}))||'Bu karar hikâyende bir iz bırakacak.'))+'</small></span>'+icon(reason?'lock':'chevron')+'</button>';
     }).join('')+'</div><p class="event-note">'+icon('clock')+'Bazı kararların etkisi sonraki yıllarda ortaya çıkar.</p></div></section>';
   }
   function activityCard(a) {
-    const why=E.actionReason(state,a), cost=E.costOf(state,a);
-    return '<button class="activity-card" data-do="activity" data-id="'+a.id+'" '+(why?'disabled':'')+'><span class="activity-top"><span class="activity-icon">'+esc(a.icon||'✦')+'</span><span class="energy-cost">'+icon('energy')+(a.energy||1)+(cost?' · '+money(cost):'')+'</span></span><h3>'+esc(a.name)+'</h3><p>'+esc(a.description)+'</p><span class="activity-footer '+(why?'locked':'')+'">'+esc(why||effectsText(a.effects)||'Kendine ve hayatına zaman ayır.')+'</span></button>';
+    const why=E.actionReason(state,a), cost=E.costOf(state,a),preview=E.activityPreview(state,a);
+    const xp=Object.entries(preview.xp).filter(([,v])=>v>0).map(([id,v])=>'+'+point(v)+' '+(E.progression(state).find(t=>t.id===id)?.name||id)+' XP').join(' · ');
+    return '<button class="activity-card" data-do="activity" data-id="'+a.id+'" '+(why?'disabled':'')+'><span class="activity-top"><span class="activity-icon">'+esc(a.icon||'✦')+'</span><span class="energy-cost">'+icon('energy')+(a.energy||1)+(cost?' · '+money(cost):'')+'</span></span><h3>'+esc(a.name)+'</h3><p>'+esc(a.description)+'</p><span class="activity-footer '+(why?'locked':'')+'">'+esc(why||effectsText(preview.effects)||'Kendine ve hayatına zaman ayır.')+(!why&&xp?'<small class="xp-gain">'+esc(xp)+'</small>':'')+(!why&&preview.repeat?'<small class="practice-note">Tekrar çalışması: bu yıl kazanım daha düşük.</small>':'')+'</span></button>';
   }
   function journal() {
     const entries=state.log.slice().reverse().slice(0,journalLimit);
@@ -151,33 +154,55 @@
   function activities() {
     const relevant=D.actions.filter(a=>state.age<=(a.maxAge??120)&&(category==='all'||a.category===category));
     return heading('Zamanını neye ayıracaksın?','İmkânların değişir. Merakın, emeğin ve bağların seninle kalır.','AKTİVİTELER')+
+      '<div class="tabs" aria-label="Aktivite görünümü">'+[['actions','Aktiviteler'],['progress','Gelişim & projeler']].map(([k,v])=>'<button class="tab '+(activityView===k?'active':'')+'" data-activity-view="'+k+'">'+v+'</button>').join('')+'</div>'+(activityView==='progress'?progressPanel():
       '<div class="tabs" role="group" aria-label="Aktivite kategorisi">'+Object.entries(categories).map(([k,v])=>'<button class="tab '+(category===k?'active':'')+'" data-category="'+k+'">'+v+'</button>').join('')+'</div>'+
-      '<div class="activity-grid">'+relevant.map(activityCard).join('')+'</div>';
+      '<div class="activity-grid">'+relevant.map(activityCard).join('')+'</div>');
+  }
+  function progressPanel() {
+    const tracks=E.progression(state),projects=D.actions.filter(a=>a.project);
+    return '<section class="card pad"><p class="eyebrow">EMEĞİN KALICI İZİ</p><h2 style="margin-top:8px">Bir puandan daha fazlası.</h2><p class="helper-text">Özelliklerin yükseldikçe gelişmek zorlaşır. Deneyim ise birikir: uzmanlık basamakları yeni projeleri ve meslekleri açar. Aynı etkinliğin bu yılki tekrarları daha az kazandırır.</p><div class="budget-row"><span>Sağlık ve stres kaynaklı çalışma verimi</span><b>%'+num(E.trainingEfficiency(state)*100)+'</b></div></section><div class="skill-grid">'+tracks.map(t=>'<article class="card pad skill-card"><div class="row between"><h3>'+esc(t.name)+'</h3><span class="pill">'+t.tierName+'</span></div><div class="skill-level">'+point(t.xp)+' <small>/ '+(t.nextXP||1200)+' XP</small></div><div class="meter" role="progressbar" aria-label="'+esc(t.name)+' uzmanlık ilerlemesi" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+t.progress+'"><i style="width:'+t.progress+'%"></i></div><p class="helper-text">'+esc(t.goal)+'</p><p class="skill-unlock">'+icon('lock')+esc(t.unlocks[0]?'Sıradaki kapı: '+t.unlocks[0].name+' · '+t.unlocks[0].minAge+' yaş ve '+t.unlocks[0].tier+'. basamak':'Yeni bir proje tamamla veya uzmanlığını kariyerine taşı.')+'</p></article>').join('')+'</div>'+section('İmzanı bıraktığın işler.','Projeler tekrarlanabilir; ilk tamamlaman kalıcı bir dönüm noktasıdır.','<span class="badge-count">'+projects.filter(a=>state.flags[a.project.flag]).length+' / '+projects.length+'</span>')+'<div class="activity-grid">'+projects.map(a=>'<div class="project-slot">'+(state.flags[a.project.flag]?'<span class="project-done">'+icon('check')+'İlk tamamlanış defterinde</span>':'')+activityCard(a)+'</div>').join('')+'</div>';
   }
   function people() {
-    const list=state.npcs.filter(p=>peopleFilter==='all'||(peopleFilter==='family'?['mother','father','child','spouse'].includes(p.role):peopleFilter==='alive'?p.alive:!p.alive));
+    const list=state.npcs.filter(p=>peopleFilter==='all'||(peopleFilter==='family'?['mother','father','sibling','child','spouse'].includes(p.role):peopleFilter==='alive'?p.alive:!p.alive));
     return heading('Hayatını paylaştıkların.','Bazıları yanından geçer. Bazıları hikâyenin parçası olur.','İLİŞKİLER')+
       '<div class="tabs">'+[['all','Herkes'],['family','Aile'],['alive','Hayatındakiler'],['memories','Hatıralar']].map(([k,v])=>'<button class="tab '+(peopleFilter===k?'active':'')+'" data-people-filter="'+k+'">'+v+'</button>').join('')+'</div><div class="npc-grid">'+list.map(p=>'<button class="card npc-card '+(!p.alive?'deceased':'')+'" data-do="person" data-id="'+esc(p.id)+'"><div class="row"><span class="npc-avatar">'+avatar(p)+'</span><span class="grow"><h3>'+esc(p.name)+'</h3><p>'+esc(roleNames[p.role]||p.role)+' · '+p.age+' yaş<br>'+esc(p.alive?(p.job||p.personality||'Kendi hikâyesini yaşıyor'):'Anısına')+'</p></span></div><div class="meter"><i style="width:'+p.bond+'%"></i></div><div class="bond-label"><span>'+esc(p.personality||'İlişkiniz')+'</span><b>'+p.bond+' / 100</b></div></button>').join('')+'</div>'+
       (!list.length?'<div class="card empty">'+icon('people')+'<h3>Bu sayfa henüz boş.</h3><p>Aktivitelerde ve olaylarda yeni insanlarla tanışabilirsin.</p></div>':'');
   }
   function future() {
     const edu=state.education,course=D.courses.find(c=>c.id===edu.courseId),job=D.careers.find(c=>c.id===state.job?.id);
-    let summary='<section class="card pad"><div class="row between"><div><span class="eyebrow">EĞİTİMİN</span><h2 style="margin-top:7px">'+esc(course?.name||schoolNames[edu.level]||'Öğrenme yolculuğun')+'</h2></div><span class="activity-icon">🎓</span></div><p class="helper-text">'+(edu.degree?'Diploma: '+esc(D.courses.find(c=>c.degree===edu.degree)?.name||edu.degree):state.age<6?'6 yaşında okul hayatın başlayacak.':'Dersler ve seçimler okul başarını şekillendirir.')+'</p><div class="row between" style="margin-top:17px"><span class="label">Başarı</span><b>'+num(edu.grade)+' / 100</b></div><div class="meter course-progress"><i style="width:'+Math.max(0,Math.min(100,edu.grade||0))+'%"></i></div>'+(course?'<p class="helper-text">Mezuniyete '+edu.yearsLeft+' yıl · '+money(course.annualCost)+'/yıl</p>':'')+'</section>';
-    if(state.job) summary+=section('İş hayatın')+'<section class="card pad"><div class="row between"><div><span class="eyebrow">SEVİYE '+state.job.level+'</span><h2 style="margin-top:6px">'+esc(job?.name||state.job.id)+'</h2></div><span class="activity-icon">'+esc(job?.icon||'💼')+'</span></div><div class="budget-row" style="margin-top:12px"><span>Yıllık brüt maaş</span><b>'+money(state.job.salary)+'</b></div><div class="budget-row"><span>İş performansı</span><b>'+num(state.job.performance)+' / 100</b></div><p class="helper-text">Düzenli çalışma ve düşük stres terfi ihtimalini artırır.</p><div class="row wrap" style="margin-top:14px"><button class="button small" data-do="confirmQuit">İşten ayrıl</button>'+(state.age>=60?'<button class="button small" data-do="retire">Emekli ol</button>':'')+'</div></section>';
-    return heading('Yarın için bir adım.','Öğren, deneyim kazan, kendi yolunu çiz.','EĞİTİM & KARİYER')+summary+
-      section('Yeni bir şey öğren.','Bölüm ve mesleki eğitim seçenekleri.')+'<div class="detail-list">'+D.courses.map(c=>{const reason=E.courseReason(state,c);return '<article class="card list-card"><span class="list-icon">'+esc(c.icon||'🎓')+'</span><div class="grow"><h3>'+esc(c.name)+'</h3><p>'+esc(c.description||'')+'</p><p>'+c.duration+' yıl · '+money(c.annualCost)+'/yıl</p>'+(reason?'<div class="requirement">'+esc(reason)+'</div>':'')+'</div><button class="button small" data-do="enroll" data-id="'+c.id+'" '+(reason?'disabled':'')+'>Kayıt ol</button></article>';}).join('')+'</div>'+
-      section('İş fırsatları.','Maaşlar yıllık brüt tutardır; giderler bütçe ekranında.')+'<div class="detail-list">'+D.careers.map(c=>{const reason=E.careerReason(state,c);return '<article class="card list-card"><span class="list-icon">'+esc(c.icon||'💼')+'</span><div class="grow"><h3>'+esc(c.name)+'</h3><p>'+esc(c.description||'')+'</p><p>'+money(c.salary)+'/yıl</p>'+(reason?'<div class="requirement">'+esc(reason)+'</div>':'')+'</div><button class="button small" data-do="apply" data-id="'+c.id+'" '+(reason?'disabled':'')+'>Başvur</button></article>';}).join('')+'</div>';
+    let summary='<section class="card pad"><div class="row between"><div><span class="eyebrow">EĞİTİMİN</span><h2 style="margin-top:7px">'+esc(course?.name||schoolNames[edu.level]||'Öğrenme yolculuğun')+'</h2></div><span class="activity-icon">🎓</span></div><p class="helper-text">'+(edu.degree?'Diploma: '+esc(D.courses.find(c=>c.degree===edu.degree)?.name||edu.degree):state.age<6?'6 yaşında okul hayatın başlayacak.':'Dersler ve seçimler okul başarını şekillendirir.')+'</p><div class="row between" style="margin-top:17px"><span class="label">Başarı</span><b>'+num(edu.grade)+' / 100</b></div><div class="meter course-progress"><i style="width:'+Math.max(0,Math.min(100,edu.grade||0))+'%"></i></div>'+(course?'<p class="helper-text">Mezuniyete '+edu.yearsLeft+' yıl · '+money(price(course.annualCost*(1-(edu.scholarship||0))))+'/yıl</p>':'')+'</section>';
+    if(state.job) summary+=section('İş hayatın')+'<section class="card pad"><div class="row between"><div><span class="eyebrow">SEVİYE '+state.job.level+'</span><h2 style="margin-top:6px">'+esc(job?.name||state.job.id)+'</h2></div><span class="activity-icon">'+esc(job?.icon||'💼')+'</span></div><div class="budget-row" style="margin-top:12px"><span>Yıllık brüt maaş</span><b>'+money(wage(state.job.salary))+'</b></div><div class="budget-row"><span>İş performansı</span><b>'+num(state.job.performance)+' / 100</b></div><p class="helper-text">Düzenli çalışma ve düşük stres terfi ihtimalini artırır.</p><div class="row wrap" style="margin-top:14px"><button class="button small" data-do="confirmQuit">İşten ayrıl</button>'+(state.age>=60?'<button class="button small" data-do="retire">Emekli ol</button>':'')+'</div></section>';
+    const referral=state.flags.careerReferral,hasReferral=referral&&!referral.consumed&&referral.expiresAge>=state.age;
+    summary+='<div class="guide-tip">'+icon('clock')+'<span>İş her yıl 3, eğitim 2 zaman ayırır. Başvuru/kayıt ayrıca 1 zaman ister. Bu yıl '+(state.year.used.jobApplications||0)+'/2 iş başvurusu yaptın. Terfi için performans, kıdem ve uzmanlık birlikte gerekir.</span></div>'+(hasReferral?'<div class="guide-tip">'+icon('people')+'<span>Bir tanıdığın sana referans oldu. '+referral.expiresAge+' yaşına kadar ilk uygun başvurunda şansın artacak; diploma ve özellik koşulları yine gerekli.</span></div>':'');
+    return heading('Yarın için bir adım.','Öğren, deneyim kazan, kendi yolunu çiz.','EĞİTİM & KARİYER')+summary+'<button class="text-link" data-activity-view="progress">Uzmanlıklarını ve kariyer kapılarını incele →</button>'+
+      section('Yeni bir şey öğren.','Bölüm ve mesleki eğitim seçenekleri.')+'<div class="detail-list">'+D.courses.map(c=>{const reason=E.courseReason(state,c);return '<article class="card list-card"><span class="list-icon">'+esc(c.icon||'🎓')+'</span><div class="grow"><h3>'+esc(c.name)+'</h3><p>'+esc(c.description||'')+'</p><p>'+c.duration+' yıl · '+money(price(c.annualCost))+'/yıl (burs öncesi)</p>'+coursePreview(c)+(reason?'<div class="requirement">'+esc(reason)+'</div>':'')+'</div><button class="button small" data-do="enroll" data-id="'+c.id+'" '+(reason?'disabled':'')+'>Kayıt ol</button></article>';}).join('')+'</div>'+
+      section('İş fırsatları.','Maaşlar yıllık brüt tutardır; giderler bütçe ekranında.')+'<div class="detail-list">'+D.careers.map(c=>{const reason=E.careerReason(state,c);return '<article class="card list-card"><span class="list-icon">'+esc(c.icon||'💼')+'</span><div class="grow"><h3>'+esc(c.name)+'</h3><p>'+esc(c.description||'')+'</p><p>'+money(wage(c.salary))+'/yıl</p>'+(reason?'<div class="requirement">'+esc(reason)+'</div>':'')+'</div><button class="button small" data-do="apply" data-id="'+c.id+'" '+(reason?'disabled':'')+'>Başvur</button></article>';}).join('')+'</div>';
   }
   function assets() {
     const b=annualBudget();
     let body='';
-    if(assetTab==='budget') body='<section class="card pad"><h3>Gelecek yılın tahmini</h3><p class="helper-text">Tüm tutarlar bir tam yıla aittir. Beklenmedik olaylar ayrıca etkiler.</p>'+((b.breakdown||[]).map(r=>'<div class="budget-row"><span>'+esc(r.label)+'</span><b>'+money(r.amount)+'</b></div>').join(''))+'<div class="budget-row total"><span>Yıl sonu farkı</span>'+moneyPill(b.net)+'</div><div class="budget-row"><span>Tahmini birikim</span><b>'+money(b.projectedCash)+'</b></div><div class="budget-row"><span>Tahmini borç</span><b>'+money(b.projectedDebt)+'</b></div></section>'+
-      (state.lastBudget?'<section class="card pad" style="margin-top:15px"><h3>Geçen yılın hesabı</h3><div class="budget-row"><span>Gelir</span><b>'+money(state.lastBudget.income)+'</b></div><div class="budget-row"><span>Gider + vergi</span><b>'+money(state.lastBudget.expenses)+'</b></div><div class="budget-row total"><span>Gerçekleşen fark</span>'+moneyPill(state.lastBudget.net)+'</div></section>':'');
-    if(assetTab==='shop') body='<div class="detail-list">'+D.items.map(i=>{const has=state.inventory.some(x=>x.id===i.id),reason=E.buyReason(state,i),locked=!!reason;return '<article class="card list-card"><span class="list-icon">'+esc(i.icon||'📦')+'</span><div class="grow"><h3>'+esc(i.name)+'</h3><p>'+esc(i.description||i.note||'')+'</p>'+(i.maintenance?'<p>Yıllık bakım: '+money(i.maintenance)+'</p>':'')+(reason?'<div class="requirement">'+esc(reason)+'</div>':'')+'</div><div class="list-actions"><span class="price">'+money(i.price)+'</span><button class="button small" data-do="buy" data-id="'+i.id+'" '+(locked?'disabled':'')+'>'+(!i.consumable&&has?'Sende var':'Satın al')+'</button></div></article>';}).join('')+'</div>';
+    if(assetTab==='budget') body='<section class="card pad"><h3>Gelecek yılın tahmini</h3><p class="helper-text">Tüm tutarlar bir tam yıla aittir. Beklenmedik olaylar ayrıca etkiler.</p>'+((b.breakdown||[]).map(r=>'<div class="budget-row"><span>'+esc(r.label)+'</span><b>'+money(r.amount)+'</b></div>').join(''))+'<div class="budget-row total"><span>Borç ödemesi sonrası fark</span>'+moneyPill(b.netAfterDebt)+'</div><div class="budget-row"><span>Tahmini birikim</span><b>'+money(b.projectedCash)+'</b></div><div class="budget-row"><span>Tahmini borç</span><b>'+money(b.projectedDebt)+'</b></div></section>'+
+      (state.lastBudget?'<section class="card pad" style="margin-top:15px"><h3>Geçen yılın hesabı</h3><div class="budget-row"><span>Gelir</span><b>'+money(state.lastBudget.income)+'</b></div><div class="budget-row"><span>Gider + vergi</span><b>'+money(state.lastBudget.expenses)+'</b></div><div class="budget-row total"><span>Anapara ödemesi sonrası nakit farkı</span>'+moneyPill(state.lastBudget.cashFlow??state.lastBudget.net)+'</div></section>':'');
+    if(assetTab==='shop') body='<div class="detail-list">'+D.items.map(i=>{const has=state.inventory.some(x=>x.id===i.id),reason=E.buyReason(state,i),locked=!!reason;return '<article class="card list-card"><span class="list-icon">'+esc(i.icon||'📦')+'</span><div class="grow"><h3>'+esc(i.name)+'</h3><p>'+esc(i.description||i.note||'')+'</p>'+(i.maintenance?'<p>Yıllık bakım: '+money(price(i.maintenance))+'</p>':'')+(reason?'<div class="requirement">'+esc(reason)+'</div>':'')+'</div><div class="list-actions"><span class="price">'+money(price(i.price))+'</span><button class="button small" data-do="buy" data-id="'+i.id+'" '+(locked?'disabled':'')+'>'+(!i.consumable&&has?'Sende var':'Satın al')+'</button></div></article>';}).join('')+'</div>';
     if(assetTab==='inventory') body=state.inventory.length?'<div class="detail-list">'+state.inventory.map(x=>{const i=D.items.find(i=>i.id===x.id);if(!i)return '';const value=E.itemValue?E.itemValue(state,x):Math.round(i.price*.5);return '<article class="card list-card"><span class="list-icon">'+esc(i.icon||'📦')+'</span><div class="grow"><h3>'+esc(i.name)+'</h3><p>'+esc(i.description||'')+'</p><p>Kondisyon %'+num(x.condition??100)+'</p></div><div class="list-actions">'+(i.consumable?'<button class="button small" data-do="use" data-id="'+i.id+'">Kullan</button>':'')+'<button class="button small" data-do="sell" data-id="'+i.id+'" '+(value<=0?'disabled':'')+'>'+money(value)+' · Sat</button></div></article>';}).join('')+'</div>':'<div class="card empty">'+icon('wallet')+'<h3>Şimdilik hafif bir çanta.</h3><p>Bazı eşyalar yeni aktivitelerin anahtarıdır. İlk kitabınla başlayabilirsin.</p></div>';
-    return heading('İmkânların ve seçimlerin.','İhtiyaçlarını karşıla. Bir hayal için yer aç.','BÜTÇE & VARLIKLAR')+'<div class="metrics"><div class="metric"><span class="label">Birikim</span><strong>'+money(state.money)+'</strong></div><div class="metric"><span class="label">Borç</span><strong class="'+(state.debt?'negative':'')+'">'+money(state.debt)+'</strong></div><div class="metric"><span class="label">Yıllık fark</span><strong class="'+(b.net<0?'negative':'positive')+'">'+money(b.net)+'</strong></div></div>'+
+    if(assetTab==='budget')body=economyPanel(b)+body+housingPanel();
+    return heading('İmkânların ve seçimlerin.','İhtiyaçlarını karşıla. Bir hayal için yer aç.','BÜTÇE & VARLIKLAR')+'<div class="metrics"><div class="metric"><span class="label">Birikim</span><strong>'+money(state.money)+'</strong></div><div class="metric"><span class="label">Borç</span><strong class="'+(state.debt?'negative':'')+'">'+money(state.debt)+'</strong></div><div class="metric"><span class="label">Borç sonrası yıllık fark</span><strong class="'+(b.netAfterDebt<0?'negative':'positive')+'">'+money(b.netAfterDebt)+'</strong></div></div>'+
       (state.debt>0?'<div class="warning row between" style="margin-top:14px"><span>Borç, yıllık faiz ve stres oluşturur.</span><button class="button small" data-do="repay" '+(state.money<=0?'disabled':'')+'>Borç öde</button></div>':'')+
       '<div class="tabs" style="margin-top:23px">'+[['shop','Mağaza'],['inventory','Eşyalarım'],['budget','Yıllık bütçe']].map(([k,v])=>'<button class="tab '+(assetTab===k?'active':'')+'" data-assets-tab="'+k+'">'+v+'</button>').join('')+'</div>'+body;
+  }
+  function coursePreview(c) {
+    if(state.age<18||state.education.courseId||state.job)return '';
+    const scholarship=Math.max(state.education.scholarship||0,state.education.grade>=85&&state.stats.knowledge>=60?.8:state.education.grade>=75?.4:0);
+    const b=E.budget({...state,education:{...state.education,courseId:c.id,scholarship}});
+    return '<p>Bursla yıllık ücret: '+money(price(c.annualCost*(1-scholarship)))+' · %'+num(scholarship*100)+' burs</p><p class="'+(b.net<0?'negative':'positive')+'">Mevcut yaşam düzeninle yıllık fark: '+money(b.net)+'</p><p class="helper-text">'+(b.net<0?'Birikimin yetmezse açık faizli borca eklenir. ':'')+'İlerleyen yılların fiyatları ve olayları bu tahmini değiştirebilir.</p>';
+  }
+  function economyPanel(b) {
+    const e=E.economy(state),support=b.familySupport;
+    return '<section class="card pad economy-card"><p class="eyebrow">'+esc(e.city)+' · '+esc(e.cycleLabel)+'</p><h2 style="margin-top:8px">Paranın da bir hikâyesi var.</h2><p class="helper-text">Fiyatlar ve ücretler ayrı değişir. Şehir, ev düzeni, eğitim, çocuklar ve borç birlikte hesaplanır. Aşağıdaki plan şu anki kararlarınla tamamlayacağın yıl içindir.</p><div class="economy-indices"><span>Fiyat değişimi <b>%'+point(e.inflation*100)+'</b></span><span>Ücret değişimi <b>%'+point(e.wageGrowth*100)+'</b></span><span>Borç faizi <b>%'+point(e.interestRate*100)+'</b></span></div>'+(e.warning?'<div class="warning">'+esc(e.warning)+'</div>':'')+'<div class="budget-row"><span>Nakit tamponun</span><b>'+point(e.monthsCovered)+' aylık temel gider</b></div><div class="budget-row"><span>Bu yıl eline geçen ek gelir</span><b>'+money(b.discretionaryIncome)+'</b></div><div class="budget-row"><span>Ek gelirin yıl sonunda ödenecek vergisi</span><b>'+money(b.sideIncomeTax)+'</b></div><p class="helper-text">Ek gelir zaten cüzdanında; yıl sonu gelirine ikinci kez eklenmez. Hediye, aile desteği ve eşya satışı emek geliri sayılmaz.</p><div class="budget-row"><span>Otomatik anapara ödemesi</span><b>'+money(b.debtPrincipal)+'</b></div><div class="budget-row total"><span>Anapara sonrası yıllık nakit farkı</span>'+moneyPill(b.netAfterDebt)+'</div><p class="helper-text">Anapara ödemesi gider değildir: hem nakdini hem borcunu azaltır. Nakit tamponu yoksa yeni borç alıp ödeme yapılmaz.</p>'+(state.age<26?'<details class="family-budget"><summary>Ailenin destek kapasitesi</summary><div class="budget-row"><span>Vergi ve hane ihtiyaçları sonrası</span><b>'+money(support.disposable)+'</b></div><div class="budget-row"><span>Bu yıl ortak destek havuzu</span><b>'+money(support.pool)+'</b></div><div class="budget-row"><span>Ek yardımlardan sonra kalan</span><b>'+money(support.remaining)+'</b></div><p class="helper-text">Anne ve baban aynı bütçeyi paylaşır. Kardeşlerin ve ailenin kendi ihtiyaçları da hesaba katılır; sevgi limitsiz, bütçe değil.</p></details>':'')+'</section>';
+  }
+  function housingPanel() {
+    if(state.age<18)return '';
+    return section('Taşınmadan önce hesabını yap.','Tahminler bugünkü fiyatlarla, yeni düzenin tam bir yılı için.')+'<div class="housing-grid">'+E.housingForecast(state).map(h=>'<article class="card pad"><div class="row between"><h3>'+esc(h.label)+'</h3>'+(state.lifestyle.housing===h.id?'<span class="pill">Şu an</span>':'')+'</div><div class="budget-row"><span>Yıllık gider + vergi</span><b>'+money(h.annualExpenses)+'</b></div><div class="budget-row"><span>Borç ödemesi sonrası fark</span>'+moneyPill(h.afterDebt)+'</div><div class="budget-row"><span>Tek seferlik taşınma</span><b>'+money(h.moveCost)+'</b></div><p class="helper-text">'+(!h.owned?'Kendi evine geçmek için önce bir ev almalısın.':!h.available?'Aile evinde kalma imkânın artık yok.':h.moveCost>state.money?'Taşınma masrafına henüz yeterli nakdin yok.':'Yaşam düzenini Sağlık menüsünden değiştirebilirsin.')+'</p></article>').join('')+'</div>';
   }
   function lifestyleSelect(key,name,desc,options) {return '<div class="setting-row"><div><h3>'+name+'</h3><p>'+desc+'</p></div><select aria-label="'+name+'" data-lifestyle="'+key+'" '+(!state.alive||state.pending?'disabled':'')+'>'+options.map(([k,v])=>'<option value="'+k+'" '+(state.lifestyle[key]===k?'selected':'')+'>'+v+'</option>').join('')+'</select></div>';}
   function health() {
@@ -196,13 +221,16 @@
   }
   function render() {
     dockObserver?.disconnect();
-    if (!state) {seenEventKey='';lastStatChanges={};$('#app').innerHTML=welcome();return;}
+    if (!state) {seenEventKey='';seenNoticeKey='';lastStatChanges={};$('#app').innerHTML=welcome();return;}
     const content={life,activities,people,future,assets,health}[tab];
     $('#app').innerHTML=header()+statusDock()+'<div class="workspace"><aside class="left-column">'+profile()+navigation()+'<div class="left-energy">'+energyPanel()+'</div><p class="side-caption">Geleceğin henüz yazılmadı.<br>Bir sonraki satır sana ait.</p></aside><main id="mainContent" class="main-column" tabindex="-1">'+(state.pending?'<div class="pending-banner">'+icon('info')+'Bir karar seni bekliyor.<button class="button small" data-do="showEvent">Olaya dön</button></div>':'')+content()+'</main>'+sidebar()+'</div>'+navigation(true)+'<div class="mobile-advance"><span class="energy-mini">'+icon('energy')+'<b>'+state.year.energy+'/'+state.year.maxEnergy+'</b> zaman</span><button class="age-button" data-do="'+(state.pending?'showEvent':'age')+'" '+(!state.alive?'disabled':'')+'><span>'+(state.pending?'Olayı aç':'Bir yıl ilerle')+'</span>'+icon('arrow')+'</button></div>';
     updateDockSize();
     if($('.status-dock'))dockObserver?.observe($('.status-dock'));
     const eventKey=state.alive&&state.pending?state.age+':'+state.pending.id+':'+(state.pending.npcId||''):'';
-    if(eventKey&&eventKey!==seenEventKey){seenEventKey=eventKey;showEvent();}
+    const noticeKey=state.notices?.[0]?.id||'';
+    if(noticeKey&&noticeKey!==seenNoticeKey){seenNoticeKey=noticeKey;showNotice();}
+    else if(!noticeKey&&eventKey&&eventKey!==seenEventKey){seenEventKey=eventKey;showEvent();}
+    if(!noticeKey)seenNoticeKey='';
     if(!eventKey)seenEventKey='';
   }
   function dialog(title,body,options={}) {
@@ -231,7 +259,14 @@
     document.body.classList.remove('dialog-open');
   }
   $('#dialog').addEventListener('close',restoreDialogFocus);
+  $('#dialog').addEventListener('cancel',e=>{if($('#dialog').dataset.kind==='notice'){e.preventDefault();ackNotices();}});
+  function showNotice() {
+    const notes=state?.notices?.slice(0,3)||[];if(!notes.length)return;
+    dialog(state.age+' yaş · Yeni bir sayfa',notes.map(n=>'<article class="story-note"><p class="eyebrow">HAYATINDA BİR ŞEY DEĞİŞTİ</p><h2>'+esc(n.title)+'</h2><p>'+esc(n.text)+'</p>'+(n.tip?'<div class="guide-tip">'+icon('compass')+'<span>'+esc(n.tip)+'</span></div>':'')+'</article>').join('')+'<button class="button primary notice-continue" data-do="ackNotice">'+(state.notices.length>3?'Diğer gelişmeler':state.pending?'Karar anına geç':'Anladım, hikâyeye devam')+' '+icon('arrow')+'</button>',{kind:'notice'});
+  }
+  function ackNotices() {if(!state?.notices?.length||$('#dialog').dataset.kind!=='notice')return;return dispatch('ackNotice',{ids:(state.notices||[]).slice(0,3).map(n=>n.id)});}
   function showEvent() {
+    if(state?.notices?.length)return showNotice();
     if(!state?.alive||!state.pending)return;
     dialog(state.age+' yaş · Bir karar anı',pendingEvent()+'<p class="helper-text event-reminder">Pencereyi kapatıp durumunu inceleyebilirsin. Kararın, “Olayı aç” düğmesinde seni bekler; seçim yapmadan yeni bir yıla geçilmez.</p>',{kind:'event'});
   }
@@ -262,11 +297,13 @@
   }
   function person(id,feedback='') {
     const p=state.npcs.find(p=>p.id===id);if(!p)return;
-    const interactions=[['ask','Ailenden destek iste','Ailenin imkânı ve aranızdaki bağ sonucu etkiler.'],['apologize','Gönlünü al','Kırgınlıkları konuşmak için bir adım at.'],['argue','Rahatsızlığını dile getir','Anlaşmazlık ilişkinizi zorlayabilir.'],['talk','Sohbet et','Birbirini daha iyi tanı.'],['time','Birlikte vakit geçir','Ortak bir hatıra biriktir.'],['gift','Hediye ver','Düşünceli bir jest.'],['flirt','Bir buluşma teklif et','Karşılıklı ilgi ve bağ önemlidir.'],['marry','Evlenme teklif et','Hayatlarınızı birleştirin.'],['child','Aileyi büyüt','Bir çocuğun sorumluluğunu birlikte üstlenin.'],['breakup','İlişkiyi bitir','Bu karar ikinizi de etkiler.']];
-    const family=['mother','father','child'].includes(p.role);
+    const memory=E.relationship(state,p);
+    const interactions=[['ask','Ailenden destek iste','Ailenin kalan yıllık destek bütçesi ve güveniniz sonucu etkiler.'],['apologize','Gönlünü al','Kırgınlıkları konuşmak için bir adım at.'],['argue','Rahatsızlığını dile getir','Anlaşmazlık ilişkinizi zorlayabilir.'],['talk','Sohbet et','Birbirini daha iyi tanı.'],['time','Birlikte vakit geçir','Ortak bir hatıra biriktir.'],['promise','Gelecek yıl için söz ver','Gelecek yaşında birlikte vakit geçirirsen güven kazanırsın.'],['gift','Hediye ver','Düşünceli bir jest; güven satın alınmaz.'],['flirt','Bir buluşma teklif et','İlgi karşılıklıysa ilişkinin adını bir sonraki kararda sen koyarsın.'],['marry','Evlenme teklif et','Hayatlarınızı birleştirin.'],['child','Aileyi büyüt','Bir çocuğun sorumluluğunu birlikte üstlenin.'],['breakup','İlişkiyi bitir','Bu karar ikinizi de etkiler.']];
+    const family=['mother','father','sibling','child','mentor'].includes(p.role)||p.mentorProtected||p.contextRole==='mentor';
     const suitable=interactions.filter(([k])=>k!=='ask'||['mother','father'].includes(p.role)).filter(([k])=>!family||!['flirt','marry','child','breakup'].includes(k)).filter(([k])=>!['flirt','marry','child','breakup'].includes(k)||(p.age>=18&&state.age>=18)).filter(([k])=>k!=='marry'||p.role==='partner').filter(([k])=>k!=='child'||p.role==='spouse').filter(([k])=>k!=='breakup'||['partner','spouse'].includes(p.role)).filter(([k])=>k!=='flirt'||!['partner','spouse'].includes(p.role));
-    dialog(p.name,'<div class="dialog-preview"><span class="npc-avatar">'+avatar(p)+'</span><div><h3>'+esc(roleNames[p.role]||p.role)+'</h3><p>'+p.age+' yaş · '+esc(p.personality||'')+'<br>'+esc(p.job||'')+'</p><span class="pill" style="margin-top:8px">Bağınız '+p.bond+' / 100</span></div></div>'+
-      (!p.alive?'<div class="divider"></div><p class="helper-text">Birlikte yaşadıklarınız hayat günlüğünde yaşamaya devam ediyor.</p>':'<p class="helper-text">İlişkilere de zaman gerekir. Aynı etkileşim yılda sınırlı sayıda kullanılabilir.</p><div class="detail-list">'+suitable.map(([k,name,desc])=>{const why=E.socialReason(state,p,k);return '<button class="event-choice" data-social="'+k+'" data-id="'+esc(p.id)+'" '+(why?'disabled':'')+'><span class="grow"><b>'+name+'</b><small>'+esc(why||desc)+'</small></span>'+icon(why?'lock':'chevron')+'</button>';}).join('')+'</div>'),{feedback});
+    dialog(p.name,'<div class="dialog-preview"><span class="npc-avatar">'+avatar(p)+'</span><div><h3>'+esc(roleNames[p.role]||p.role)+'</h3><p>'+p.age+' yaş · '+esc(p.personality||'')+'<br>'+esc(p.job||'')+'</p><div class="row wrap" style="margin-top:8px"><span class="pill">Yakınlık '+num(p.bond)+'</span><span class="pill">Güven '+num(memory.trust)+'</span></div></div></div><p class="helper-text">'+esc(memory.label)+' · '+esc(memory.explanation)+'</p>'+(memory.promiseText?'<div class="guide-tip">'+icon('clock')+'<span>'+esc(memory.promiseText)+'</span></div>':'')+
+      (memory.memories.length?'<details class="memory-list"><summary>Aranızda kalan izler · '+memory.memories.length+'</summary>'+memory.memories.slice(0,6).map(m=>'<p><small>'+m.age+' yaş</small> '+esc(m.text||m.title||m.kind)+'</p>').join('')+'</details>':'')+
+      (!p.alive?'<div class="divider"></div><p class="helper-text">Birlikte yaşadıklarınız hayat günlüğünde yaşamaya devam ediyor.</p>':'<p class="helper-text">Her etkileşim 1 zaman. Aynı etkileşim yılda sınırlı sayıda kullanılabilir.</p><div class="detail-list">'+suitable.map(([k,name,desc])=>{const why=E.socialReason(state,p,k),cost={gift:state.age<18?250:1500,flirt:1800,marry:48000,child:18000,breakup:p.role==='spouse'?12000:0}[k]||0;return '<button class="event-choice" data-social="'+k+'" data-id="'+esc(p.id)+'" '+(why?'disabled':'')+'><span class="grow"><b>'+name+'</b><small>'+esc(why||((cost?money(price(cost))+' · ':'')+desc))+'</small></span>'+icon(why?'lock':'chevron')+'</button>';}).join('')+'</div>'),{feedback});
   }
   function exportSave() {
     const file=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download='bir-omur-'+state.name.replace(/[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ-]/g,'_')+'-'+state.age+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Hayat defterin dosyaya kaydedildi.');
@@ -277,7 +314,7 @@
       if(file.size>5_000_000)throw new Error('Dosya 5 MB sınırını aşıyor.');
       const raw=JSON.parse(await file.text());
       if(!raw||typeof raw!=='object'||Array.isArray(raw)||typeof raw.name!=='string'||!Number.isFinite(raw.age))throw new Error('Bu dosya geçerli bir hayat kaydı değil.');
-      const imported=E.migrate(raw);archiveCurrent();state=imported;result='';lastStatChanges={};seenEventKey='';notice='Kayıt dosyan yüklendi.';tab='life';save();closeDialog();render();toast('Hayatın kaldığı yerden devam ediyor.');
+      const imported=E.migrate(raw);archiveCurrent();state=imported;result='';lastStatChanges={};seenEventKey='';seenNoticeKey='';notice='Kayıt dosyan yüklendi.';tab='life';save();closeDialog();render();toast('Hayatın kaldığı yerden devam ediyor.');
     }catch(error){toast(error.message||'Kayıt dosyası okunamadı.');}finally{e.target.value='';}
   });
   document.addEventListener('submit',e=>{
@@ -289,14 +326,16 @@
   });
   document.addEventListener('click',e=>{
     const b=e.target.closest('button');if(!b||b.disabled)return;
-    if(b.dataset.tab){tab=b.dataset.tab;render();window.scrollTo({top:0,behavior:'instant'});return;}
+    if(b.dataset.tab){tab=b.dataset.tab;if(b.dataset.assetsTab)assetTab=b.dataset.assetsTab;render();window.scrollTo({top:0,behavior:'instant'});return;}
     if(b.dataset.category){category=b.dataset.category;render();return;}
+    if(b.dataset.activityView){activityView=b.dataset.activityView;tab='activities';render();return;}
     if(b.dataset.peopleFilter){peopleFilter=b.dataset.peopleFilter;render();return;}
     if(b.dataset.assetsTab){assetTab=b.dataset.assetsTab;render();return;}
     if(b.dataset.appearance){if(dispatch('appearance',{key:b.dataset.appearance,value:b.dataset.value}).ok)appearance();return;}
-    if(b.dataset.social){const response=dispatch('social',{id:b.dataset.id,interaction:b.dataset.social});if(response.ok)person(b.dataset.id,response.message);return;}
+    if(b.dataset.social){const response=dispatch('social',{id:b.dataset.id,interaction:b.dataset.social});if(response.ok&&!state.pending&&!state.notices.length)person(b.dataset.id,response.message);return;}
     const action=b.dataset.do,id=b.dataset.id;
-    if(action==='closeDialog')return closeDialog();
+    if(action==='closeDialog')return $('#dialog').dataset.kind==='notice'?ackNotices():closeDialog();
+    if(action==='ackNotice')return ackNotices();
     if(action==='showEvent')return showEvent();
     if(action==='settings')return settings();
     if(action==='install')return installInfo();
@@ -308,14 +347,14 @@
     if(action==='import')return $('#importFile').click();
     if(action==='newLife')return newLifePrompt();
     if(action==='confirmNew'){try{archiveCurrent();localStorage.removeItem(KEY);state=null;notice='Önceki hayatın arşive eklendi.';closeDialog();render();}catch(error){toast(error.message);}return;}
-    if(action==='restore'){try{const lives=JSON.parse(localStorage.getItem('birOmur.archive')||'[]'),restored=E.migrate(lives[Number(b.dataset.index)]);archiveCurrent();state=restored;result='';lastStatChanges={};seenEventKey='';notice='Arşivdeki hayatına döndün.';tab='life';save();closeDialog();render();}catch{toast('Arşiv okunamadı.');}return;}
+    if(action==='restore'){try{const lives=JSON.parse(localStorage.getItem('birOmur.archive')||'[]'),restored=E.migrate(lives[Number(b.dataset.index)]);archiveCurrent();state=restored;result='';lastStatChanges={};seenEventKey='';seenNoticeKey='';notice='Arşivdeki hayatına döndün.';tab='life';save();closeDialog();render();}catch{toast('Arşiv okunamadı.');}return;}
     if(action==='moreJournal'){journalLimit+=20;render();return;}
     if(action==='confirmQuit')return dialog('İşinden ayrılmak','<p>Düzenli gelirin sona erecek. Yıllık giderlerin devam ederken birikimine ihtiyaç duyabilirsin.</p><button class="button danger" data-do="quit">İşten ayrıl</button>');
     if(action==='repay')return dialog('Borcunu azalt','<p>Borcun '+money(state.debt)+'. Kullanılabilir birikimin '+money(state.money)+'.</p><div class="row wrap">'+[1000,10000,Math.min(state.money,state.debt)].filter((x,i,a)=>x>0&&x<=state.money&&x<=state.debt&&a.indexOf(x)===i).map(x=>'<button class="button" data-do="payDebt" data-amount="'+x+'">'+money(x)+' öde</button>').join('')+'</div>');
     if(action==='payDebt'){if(dispatch('repay',{amount:Number(b.dataset.amount)}).ok)closeDialog();return;}
-    if(action==='choice'){const response=dispatch('choice',{index:Number(b.dataset.index)});if(response.ok){$('#mainContent')?.focus({preventScroll:true});$('#mainContent')?.scrollIntoView({block:'start',behavior:'smooth'});}return;}
+    if(action==='choice'){const response=dispatch('choice',{index:Number(b.dataset.index)});if(response.ok&&!$('#dialog').open){$('#mainContent')?.focus({preventScroll:true});$('#mainContent')?.scrollIntoView({block:'start',behavior:'smooth'});}return;}
     if(action==='age'){const response=dispatch('age');if(response.ok&&!state.pending)$('#mainContent')?.scrollIntoView({block:'start',behavior:'smooth'});return;}
-    if(['activity','buy','sell','use','enroll','apply','quit','retire'].includes(action)){const response=dispatch(action,{id});if(response.ok&&['quit','retire'].includes(action))closeDialog();}
+    if(['activity','buy','sell','use','enroll','apply','quit','retire'].includes(action)){const response=dispatch(action,{id});if(response.ok&&['quit','retire'].includes(action)&&!state.notices.length&&!state.pending)closeDialog();}
   });
   if(!E||!D||!A){$('#app').innerHTML='<main class="welcome"><h1>Hayat defteri yüklenemedi.</h1><p>Sayfayı yenileyip tekrar dene.</p></main>';return;}
   window.addEventListener('pwa-status', e=>{if(e.detail.updateReady)toast('Yeni sürüm hazır. Ayarlardan kaydını koruyarak güncelleyebilirsin.');});

@@ -26,11 +26,11 @@
     { id: 'public_clinic', name: 'Aile sağlığı merkezi', description: 'Ücretsiz temel muayene. Randevu ve takip için daha çok zaman ayırırsın.', icon: '🏥', category: 'health', minAge: 0, energy: 2, perYear: 1, special: 'treatment', effects: { health: 9, stress: -3 } },
     { id: 'therapy', name: 'Psikolojik destek', description: 'Bir uzmanla düşüncelerini konuş; kaygı ve stresle başa çık.', icon: '💬', category: 'health', minAge: 12, energy: 1, cost: 1800, perYear: 2, effects: { stress: -20, happiness: 7, health: 3, clearFlag: 'unresolved_conflict' } },
     { id: 'cook', name: 'Evde dengeli yemek', description: 'Mutfak ekipmanlarınla sağlıklı bir rutin kur.', icon: '🥘', category: 'health', minAge: 16, energy: 1, cost: 350, perYear: 2, requires: { items: ['cookware'] }, effects: { health: 7, happiness: 4, knowledge: 2 } },
-    { id: 'part_time', name: 'Günlük ek iş', description: 'Güvenli, kısa süreli bir işten ₺3.200 kazan. Zaman ve yorgunluk bedeli var.', icon: '📦', category: 'work', minAge: 16, energy: 2, perYear: 2, effects: { money: 3200, stress: 7, health: -2, knowledge: 1 }, meetChance: 0.22 },
-    { id: 'freelance', name: 'Serbest proje', description: 'Bilgisayarın ve portföyünle ücretli iş yap. ₺9.000 gelir getirir.', icon: '🧑‍💻', category: 'work', minAge: 18, energy: 2, perYear: 2, requires: { items: ['laptop'], stats: { knowledge: 45 }, flags: ['portfolio'] }, effects: { money: 9000, knowledge: 3, stress: 8 }, meetChance: 0.22 },
+    { id: 'part_time', name: 'Günlük ek iş', description: 'Güvenli, kısa süreli bir işten gelir kazan. Zaman ve yorgunluk bedeli var; brüt kazanç aşağıda gösterilir.', icon: '📦', category: 'work', minAge: 16, energy: 2, perYear: 2, effects: { money: 3200, stress: 7, health: -2, knowledge: 1 }, meetChance: 0.22 },
+    { id: 'freelance', name: 'Serbest proje', description: 'Bilgisayarın ve portföyünle ücretli iş yap. Brüt gelir ekonominin durumuna göre değişir.', icon: '🧑‍💻', category: 'work', minAge: 18, energy: 2, perYear: 2, requires: { items: ['laptop'], stats: { knowledge: 45 }, flags: ['portfolio'] }, effects: { money: 9000, knowledge: 3, stress: 8 }, meetChance: 0.22 },
     { id: 'overtime', name: 'Ek sorumluluk al', description: 'İş performansını geliştir; yükselme şansın artsın.', icon: '📈', category: 'work', minAge: 18, energy: 2, perYear: 2, requires: { job: true }, effects: { performance: 14, knowledge: 2, stress: 11, happiness: -3 } },
     { id: 'network', name: 'Mesleki buluşma', description: 'Sektöründeki insanlarla tanış; konuşma becerini ve performansını artır.', icon: '🤝', category: 'work', minAge: 18, energy: 1, cost: 900, perYear: 2, requires: { job: true }, effects: { performance: 6, charisma: 5 }, meetChance: 0.55 },
-    { id: 'public_aid', name: 'Sosyal destek başvurusu', description: 'İşsiz ve birikimin ₺15.000 altındaysa bu yıl tek seferlik ₺6.000 acil destek isteyebilirsin.', icon: '🧾', category: 'work', minAge: 18, energy: 2, perYear: 1, special: 'aid', requires: { cashBelow: 15000, job: false }, effects: { money: 6000, stress: -4 } },
+    { id: 'public_aid', name: 'Sosyal destek başvurusu', description: 'İşsiz ve birikimin düşükse bu yıl tek seferlik acil destek isteyebilirsin. Güncel destek tutarı aşağıda gösterilir.', icon: '🧾', category: 'work', minAge: 18, energy: 2, perYear: 1, special: 'aid', requires: { cashBelow: 15000, job: false }, effects: { money: 6000, stress: -4 } },
     { id: 'driving_school', name: 'Ehliyet kursu', description: 'Direksiyon eğitimini ve sınavı tamamla. Otomobil satın almayı açar.', icon: '🚦', category: 'learning', minAge: 18, energy: 2, cost: 12000, perYear: 1, requires: { notFlags: ['driver_license'] }, effects: { knowledge: 2, flag: 'driver_license' } },
     { id: 'music', name: 'Enstrüman çalış', description: 'Gitarınla yeni bir parça öğren; sahne için özgüven kazan.', icon: '🎸', category: 'creative', minAge: 8, energy: 1, perYear: 2, requires: { items: ['guitar'] }, effects: { charisma: 5, happiness: 6, stress: -6, flag: 'musician' }, meetChance: 0.15 },
     { id: 'paint', name: 'Çizim günlüğü', description: 'Çizim setinle çevrene başka bir gözle bak.', icon: '🎨', category: 'creative', minAge: 5, energy: 1, perYear: 2, requires: { items: ['art_kit'] }, effects: { happiness: 6, knowledge: 3, stress: -6 }, meetChance: 0.12 },
@@ -44,23 +44,23 @@
   const items = [
     { id: 'book', name: 'Küçük kitaplık', icon: '📚', category: 'learning', price: 500, minAge: 4, description: 'Kitap okuma eylemini açar. Bir kere al, yıllarca oku.', bonus: { knowledge: 2 }, conditionLoss: 0, maintenance: 0 },
     { id: 'shoes', name: 'Spor ayakkabısı', icon: '👟', category: 'health', price: 1800, minAge: 7, description: 'Koşu ve spor salonu için gerekir.', bonus: { strength: 1 }, conditionLoss: 14, maintenance: 0 },
-    { id: 'bike', name: 'Şehir bisikleti', icon: '🚲', category: 'outdoors', price: 9000, minAge: 10, description: 'Bisiklet rotalarını açar. Yıllık ₺450 bakım gideri vardır.', bonus: { strength: 2 }, conditionLoss: 8, maintenance: 450 },
+    { id: 'bike', name: 'Şehir bisikleti', icon: '🚲', category: 'outdoors', price: 9000, minAge: 10, description: 'Bisiklet rotalarını açar. Yıllık bakım giderini de bütçene kat.', bonus: { strength: 2 }, conditionLoss: 8, maintenance: 450 },
     { id: 'laptop', name: 'Dizüstü bilgisayar', icon: '💻', category: 'learning', price: 24000, minAge: 12, description: 'Yazılım projesi, serbest çalışma ve anı yazmayı açar.', bonus: { knowledge: 3 }, conditionLoss: 9, maintenance: 900 },
     { id: 'guitar', name: 'Akustik gitar', icon: '🎸', category: 'creative', price: 5500, minAge: 8, description: 'Müzik çalışmayı ve açık mikrofon sahnesini açar.', bonus: { charisma: 2 }, conditionLoss: 5, maintenance: 200 },
     { id: 'art_kit', name: 'Çizim seti', icon: '🎨', category: 'creative', price: 900, minAge: 5, description: 'Çizim günlüğünü açar. Zamanla malzemeler tükenir.', bonus: { happiness: 2 }, conditionLoss: 18, maintenance: 0 },
     { id: 'camera', name: 'Fotoğraf makinesi', icon: '📷', category: 'creative', price: 16000, minAge: 14, description: 'Fotoğraf yürüyüşlerini açar.', bonus: { charisma: 2 }, conditionLoss: 7, maintenance: 300 },
     { id: 'cookware', name: 'Temel mutfak seti', icon: '🍳', category: 'health', price: 3500, minAge: 16, description: 'Evde dengeli yemek hazırlamayı açar.', bonus: { health: 2 }, conditionLoss: 5, maintenance: 0 },
     { id: 'garden_kit', name: 'Balkon bahçe seti', icon: '🪴', category: 'outdoors', price: 1200, minAge: 10, description: 'Bahçecilikle ilgilenmeyi açar.', bonus: { happiness: 2 }, conditionLoss: 12, maintenance: 120 },
-    { id: 'suit', name: 'İş görüşmesi kıyafeti', icon: '👔', category: 'work', price: 6500, minAge: 16, description: 'İlk izlenimine katkı sağlar; karizma +5.', bonus: { charisma: 5 }, conditionLoss: 8, maintenance: 0 },
+    { id: 'suit', name: 'İş görüşmesi kıyafeti', icon: '👔', category: 'work', price: 6500, minAge: 16, description: 'İlk izlenimine küçük, tek seferlik katkı sağlar. Karizma katkısı mevcut gelişimine göre azalır.', bonus: { charisma: 5 }, conditionLoss: 8, maintenance: 0 },
     { id: 'phone', name: 'Akıllı telefon', icon: '📱', category: 'social', price: 11000, minAge: 13, description: 'İletişim becerine küçük bir katkı. Bazı olaylarda seçenek açar.', bonus: { charisma: 2 }, conditionLoss: 13, maintenance: 600 },
     { id: 'toolkit', name: 'Tamir takımı', icon: '🧰', category: 'work', price: 2800, minAge: 16, description: 'Evdeki arızalarda masrafı azaltan seçenekler açar.', bonus: { knowledge: 2 }, conditionLoss: 4, maintenance: 0 },
-    { id: 'car', name: 'İkinci el otomobil', icon: '🚗', category: 'work', price: 380000, minAge: 18, requires: { flags: ['driver_license'] }, description: 'Ehliyet gerekir. Yıllık ₺24.000 bakım giderini bütçene kat.', bonus: { happiness: 5 }, conditionLoss: 6, maintenance: 24000 },
-    { id: 'formal_watch', name: 'Kaliteli saat', icon: '⌚', category: 'social', price: 18000, minAge: 18, description: 'Karizma +3. Önce temel ihtiyaçlarını düşün.', bonus: { charisma: 3 }, conditionLoss: 4, maintenance: 0 },
+    { id: 'car', name: 'İkinci el otomobil', icon: '🚗', category: 'work', price: 380000, minAge: 18, requires: { flags: ['driver_license'] }, description: 'Ehliyet gerekir. Satın alma dışında her yıl değişen bakım giderini bütçene kat.', bonus: { happiness: 5 }, conditionLoss: 6, maintenance: 24000 },
+    { id: 'formal_watch', name: 'Kaliteli saat', icon: '⌚', category: 'social', price: 18000, minAge: 18, description: 'Görünümüne tek seferlik küçük katkı. İleri karizmada getirisi azalır; önce temel ihtiyaçlarını düşün.', bonus: { charisma: 3 }, conditionLoss: 4, maintenance: 0 },
     { id: 'medicine', name: 'Temel bakım paketi', icon: '🩹', category: 'health', price: 750, minAge: 0, consumable: true, special: 'medicine', description: 'Tek kullanım: sağlık +8. Hastalık tedavisinin yerine geçmez.', effects: { health: 8, stress: -2 }, bonus: {} },
     { id: 'vitamins', name: 'Dengeli beslenme paketi', icon: '🥗', category: 'health', price: 1200, minAge: 0, consumable: true, description: 'Tek kullanım: sağlık +5, mutluluk +3.', effects: { health: 5, happiness: 3 }, bonus: {} },
     { id: 'gift', name: 'Özenli hediye', icon: '🎁', category: 'social', price: 1200, minAge: 6, consumable: true, description: 'Kullanıldığında yakınlarınla bağını güçlendirir.', effects: { bond: 7, happiness: 2 }, bonus: {} },
     { id: 'holiday', name: 'Kısa tatil paketi', icon: '🏖️', category: 'health', price: 18000, minAge: 18, consumable: true, description: 'Tek kullanım: stres −22, mutluluk +14, sağlık +3.', effects: { stress: -22, happiness: 14, health: 3 }, bonus: {} },
-    { id: 'apartment', name: 'Küçük şehir dairesi', icon: '🏡', category: 'property', price: 1800000, minAge: 18, description: 'Satın aldıktan sonra yaşam düzeninden kendi evine taşınabilirsin. Yıllık ₺12.000 bakım gideri vardır.', bonus: { happiness: 8 }, conditionLoss: 0, maintenance: 12000 }
+    { id: 'apartment', name: 'Küçük şehir dairesi', icon: '🏡', category: 'property', price: 1800000, minAge: 18, description: 'Satın aldıktan sonra yaşam düzeninden kendi evine taşınabilirsin. Bakım gideri her yıl bütçene yansır.', bonus: { happiness: 8 }, conditionLoss: 0, maintenance: 12000 }
   ];
 
   const careers = [
@@ -95,6 +95,64 @@
     { id: 'law', name: 'Hukuk fakültesi', icon: '⚖️', description: 'Dört yıllık yoğun okuma ve yorumlama programı.', degree: 'law', duration: 4, annualCost: 30000, minAge: 18, requires: { stats: { knowledge: 50, charisma: 30 } } },
     { id: 'medicine', name: 'Tıp fakültesi', icon: '🏥', description: 'Altı yıllık uzun eğitim. Bütçeni ve çalışma düzenini planla.', degree: 'medicine', duration: 6, annualCost: 32000, minAge: 18, requires: { stats: { knowledge: 62 } } }
   ];
+
+  // Skill experience is permanent; core-stat gains are scaled in LifeProgression.
+  // One action is part of a yearly routine, not a button to repeat indefinitely.
+  const actionPractice = {
+    play: { creative: 5 }, family_story: { academic: 3, social: 3 },
+    library: { academic: 8 }, read: { academic: 10 }, study: { academic: 10 },
+    study_group: { academic: 7, social: 4 }, code: { academic: 16 },
+    language: { academic: 5, social: 7 }, debate: { academic: 5, social: 10 },
+    socialize: { social: 7 }, cafe: { social: 8 }, volunteer: { social: 10 }, community: { social: 10 },
+    walk: { athletics: 4 }, run: { athletics: 10 }, cycle: { athletics: 11 }, gym: { athletics: 12 }, swim: { athletics: 8 },
+    cook: { creative: 7 }, part_time: { social: 3 }, freelance: { academic: 12 }, overtime: { academic: 5 }, network: { social: 11 },
+    driving_school: { academic: 4 }, music: { creative: 11 }, paint: { creative: 9 }, photography: { creative: 10 },
+    perform: { creative: 16, social: 6 }, garden: { academic: 3, creative: 4 }, mentor: { social: 10, academic: 4 }, memoir: { creative: 12 }
+  };
+  for (const action of actions) action.skillXP = actionPractice[action.id] || {};
+  actions.find(action => action.id === 'study').effects.grade = 5;
+  actions.find(action => action.id === 'library').effects.grade = 1;
+  actions.find(action => action.id === 'study_group').effects.grade = 3;
+  actions.find(action => action.id === 'code').requires.skills = { academic: 1 };
+  actions.find(action => action.id === 'freelance').requires.skills = { academic: 2 };
+  actions.find(action => action.id === 'perform').requires.skills = { creative: 1 };
+  actions.find(action => action.id === 'mentor').requires.skills = { social: 2 };
+  actions.find(action => action.id === 'read').description = 'Kitaplığında derinleş. Araştırma deneyimi biriktir; aynı yıl ikinci tekrar daha az gelişim verir.';
+  actions.find(action => action.id === 'study').description = 'Notlarına ve araştırma deneyimine yatırım yap. İyi bir okul sonucu için birkaç yıla yayılan bir çalışma düzeni kur.';
+  actions.find(action => action.id === 'code').description = 'Araştırmada Temel düzey ve bilgisayar gerekir. İlk portföyünü oluştur; ücretli işler için Yetkin düzeye ilerle.';
+  actions.find(action => action.id === 'freelance').description = 'Araştırmada Yetkin düzey, bilgisayar ve portföy gerekir. Güncel brüt gelir aşağıda gösterilir; zaman ve stres bedelini düşün.';
+
+  actions.push({ id: 'exam_preparation', name: 'Eğitime dönüş hazırlığı', description: 'Eğitime yeniden başlamak için temel konuları toparla. Başvurulardaki başarı puanın artar; düşük okul notu hayat boyu kapıları kapatmaz.', icon: '📓', category: 'learning', minAge: 18, energy: 2, perYear: 2, requires: { items: ['book'], school: false }, skillXP: { academic: 10 }, effects: { knowledge: 4, grade: 6, stress: 4 } });
+
+  actions.push(
+    { id: 'research_notebook', name: 'Araştırma dosyası hazırla', description: 'Bir soruyu kaynak, karşılaştırma ve sonuçla incele. Bir defalık başarı rozeti ve kalıcı araştırma deneyimi kazan.', icon: '🔎', category: 'learning', minAge: 12, energy: 2, perYear: 1, requires: { items: ['book'], stats: { knowledge: 32 }, skills: { academic: 1 } }, skillXP: { academic: 24 }, project: { flag: 'research_dossier', title: 'İlk araştırma dosyan', text: 'Bir merakı somut bir çalışmaya dönüştürdün.' }, effects: { knowledge: 8, grade: 4, stress: 5, flag: 'research_dossier' } },
+    { id: 'publish_project', name: 'Açık kaynak projesi yayımla', description: 'Yıllar içinde kurduğun uzmanlığı herkese açık bir projeye dönüştür. Portföyünü güçlendir, mesleğinde görünürlük kazan.', icon: '🧩', category: 'learning', minAge: 18, energy: 3, perYear: 1, requires: { items: ['laptop'], stats: { knowledge: 58 }, skills: { academic: 3 }, flags: ['portfolio'] }, skillXP: { academic: 40, social: 6 }, project: { flag: 'published_project', title: 'Bir fikrin artık dünyada', text: 'İlk açık kaynak projen yayımlandı. Öğrendiklerin başkaları için de değer üretiyor.' }, effects: { knowledge: 12, performance: 9, happiness: 5, stress: 8, flag: 'published_project' } },
+    { id: 'race_training', name: 'İlk 10 kilometre hedefi', description: 'Yarış hazırlığını bir yıllık düzenli programa dönüştür. Spor Temel düzeyi ve sağlıklı bir beden gerekir.', icon: '🏁', category: 'outdoors', minAge: 14, energy: 2, perYear: 1, requires: { items: ['shoes'], stats: { strength: 32, health: 55 }, skills: { athletics: 1 } }, skillXP: { athletics: 25 }, project: { flag: 'first_race', title: 'Kendi sınırını aştın', text: 'İlk 10 kilometre hedefin tamamlandı. Sonucu tek bir gün değil, hazırlığın belirledi.' }, effects: { strength: 9, health: 3, happiness: 5, stress: 3, flag: 'first_race' } },
+    { id: 'coach_team', name: 'Amatör takıma yol göster', description: 'Spor uzmanlığını bir takımla paylaş. İletişim ve performans geliştir; antrenörlük için somut deneyim edin.', icon: '🥇', category: 'outdoors', minAge: 20, energy: 2, perYear: 1, requires: { items: ['shoes'], stats: { strength: 55, health: 50, charisma: 28 }, skills: { athletics: 3 } }, skillXP: { athletics: 32, social: 12 }, project: { flag: 'coached_team', title: 'Takımının ilk sezonu', text: 'Kendi antrenmanından fazlasını düşündün; bir ekibin gelişimine katkı verdin.' }, effects: { strength: 6, charisma: 4, performance: 8, happiness: 5, flag: 'coached_team' }, meetChance: .4 },
+    { id: 'creative_portfolio', name: 'İlk seçkini hazırla', description: 'Çizimlerini tek bir tema etrafında düzenle. Yaratıcılık Temel düzeyinden sergi hedefine doğru ilk somut adımını at.', icon: '🖼️', category: 'creative', minAge: 12, energy: 2, perYear: 1, requires: { items: ['art_kit'], skills: { creative: 1 } }, skillXP: { creative: 25 }, project: { flag: 'creative_portfolio', title: 'Dağınık eskizlerden bir seçki', text: 'İlk yaratıcı portföyünü tamamladın. Çalışmaların artık birlikte bir hikâye anlatıyor.' }, effects: { knowledge: 3, charisma: 5, happiness: 5, stress: 3, flag: 'creative_portfolio' } },
+    { id: 'community_exhibition', name: 'Topluluk sergisi düzenle', description: 'Uzman düzeyindeki çalışmalarını insanlarla paylaş. Bir seçki, ekipman ve dinleyiciyle iletişim becerisi gerekir.', icon: '🎭', category: 'creative', minAge: 18, energy: 3, perYear: 1, requires: { items: ['art_kit'], stats: { charisma: 40 }, skills: { creative: 3 }, flags: ['creative_portfolio'] }, skillXP: { creative: 40, social: 12 }, project: { flag: 'first_exhibition', title: 'İlk serginin kapıları açıldı', text: 'İnsanlar çalışmalarının önünde durup konuştu. Yaratıcılığın paylaşılan bir deneyime dönüştü.' }, effects: { charisma: 9, happiness: 8, performance: 5, stress: 5, flag: 'first_exhibition' }, meetChance: .5 },
+    { id: 'organize_volunteers', name: 'Dayanışma ekibi kur', description: 'Gönüllülük deneyimini küçük bir ekibe taşı. İş bölümü ve açık iletişimle birlikte bir hedef tamamla.', icon: '🫶', category: 'social', minAge: 14, energy: 2, perYear: 1, requires: { stats: { charisma: 28 }, skills: { social: 1 }, flags: ['volunteer'] }, skillXP: { social: 26 }, project: { flag: 'organized_team', title: 'Birlikte ilk işiniz', text: 'Küçük bir dayanışma ekibiyle söz verdiğiniz işi tamamladınız.' }, effects: { charisma: 8, happiness: 5, stress: 3, flag: 'organized_team' }, meetChance: .45 },
+    { id: 'facilitate_conflict', name: 'Uzlaşma atölyesi yönet', description: 'Farklı görüşleri dinleyip ortak bir çözüm üret. İletişim uzmanlığına ve önceden kurulmuş bir ekip deneyimine dayanır.', icon: '🕊️', category: 'social', minAge: 22, energy: 2, perYear: 1, requires: { stats: { charisma: 50, knowledge: 35 }, skills: { social: 3 }, flags: ['organized_team'] }, skillXP: { social: 35, academic: 8 }, project: { flag: 'mediated_conflict', title: 'Ortak bir yol bulundu', text: 'Bir anlaşmazlıkta herkesin dinlendiği bir alan açtın; ekibin birlikte ilerleyebildi.' }, effects: { charisma: 9, knowledge: 3, performance: 7, happiness: 4, flag: 'mediated_conflict' }, meetChance: .35 }
+  );
+
+  const careerSkills = { sales: { social: 1 }, technician: { academic: 1 }, chef: { creative: 1 }, trainer: { athletics: 2 }, designer: { creative: 2 }, accountant: { academic: 2 }, teacher: { academic: 2, social: 1 }, nurse: { academic: 2 }, developer: { academic: 2 }, engineer: { academic: 2 }, lawyer: { academic: 2, social: 2 }, doctor: { academic: 3 } };
+  for (const career of careers) if (careerSkills[career.id]) career.requires.skills = careerSkills[career.id];
+  const admission = {
+    technical: { knowledge: 25, minGrade: 35 }, culinary: { knowledge: 20, minGrade: 35 },
+    fitness: { minGrade: 35 }, design: { knowledge: 30, minGrade: 45 },
+    business: { knowledge: 36, minGrade: 55 }, education: { knowledge: 38, minGrade: 55 },
+    nursing: { knowledge: 40, minGrade: 58 }, software: { knowledge: 45, minGrade: 65 },
+    engineering: { knowledge: 43, minGrade: 60 }, law: { knowledge: 46, minGrade: 65 },
+    medicine: { knowledge: 55, minGrade: 78 }
+  };
+  for (const course of courses) {
+    course.minGrade = admission[course.id].minGrade;
+    if (admission[course.id].knowledge) course.requires.stats.knowledge = admission[course.id].knowledge;
+  }
+  for (const item of items) {
+    if (item.id === 'suit') item.description = 'İlk izlenimine küçük, tek seferlik katkı sağlar. Karizma katkısı mevcut gelişimine göre azalır.';
+    if (item.id === 'formal_watch') item.description = 'Görünümüne tek seferlik küçük katkı. İleri karizmada getirisi azalır; önce temel ihtiyaçlarını düşün.';
+  }
 
   const choice = (label, outcome, effects, extra = {}) => ({ label, outcome, effects: effects || {}, ...extra });
   const event = (id, title, description, icon, minAge, maxAge, choices, extra = {}) => ({ id, title, description, icon, minAge, maxAge, choices, weight: 2, cooldown: 5, ...extra });
@@ -143,7 +201,7 @@
       choice('Bu yıl derslerine odaklan', 'Şenliği arkadaşlarına bıraktın; mevcut derslerini toparladın.', { grade: 4, stress: -2 })
     ], { once: true, requires: { school: true } }),
     event('science_fair', 'Bilim şenliğinde son masa', 'Geçen yıl başladığın proje sonunda jüri karşısında. Düzeneğin çalışıyor; şimdi fikrini anlatma sırası.', '🏆', 0, 110, [
-      choice('Deneyini adım adım açıkla', 'Çalışmanın emeğini anlattın.', {}, { chance: { stat: 'knowledge', target: 40, success: { effects: { grade: 10, happiness: 8, money: 2500, flag: 'science_award' }, text: 'Jüri projenin açıklığını beğendi. Başarı belgesi ve ₺2.500 ödül aldın.' }, failure: { effects: { knowledge: 5, happiness: 2 }, text: 'Ödül alamadın ama sorulardan çok şey öğrendin. İlk projen sergilendi.' } } }),
+      choice('Deneyini adım adım açıkla', 'Çalışmanın emeğini anlattın.', {}, { chance: { stat: 'knowledge', target: 40, success: { effects: { grade: 10, happiness: 8, money: 2500, flag: 'science_award' }, text: 'Jüri projenin açıklığını beğendi. Başarı belgesi ve para ödülü aldın.' }, failure: { effects: { knowledge: 5, happiness: 2 }, text: 'Ödül alamadın ama sorulardan çok şey öğrendin. İlk projen sergilendi.' } } }),
       choice('Sunumu bir arkadaşınla yap', 'Görevleri paylaşınca heyecanın azaldı; yeni bir arkadaş kazandın.', { grade: 5, charisma: 3, meet: 'friend' })
     ], { triggeredOnly: true, once: true }),
     event('team_selection', 'Takım seçmeleri', 'Beden eğitimi öğretmenin seni okul takımının denemesine çağırdı. Seçmeler haftaya.', '⚽', 8, 16, [
@@ -156,7 +214,7 @@
       choice('Ücretsiz kontenjana başvur', 'Öğretmenin seni kontenjana yazdı. Gezide yeni şeyler öğrendin.', { knowledge: 4, happiness: 2 }),
       choice('Kütüphanede kendi keşfini yap', 'Gezemediğin sergi hakkında bir kitap buldun.', { knowledge: 3, stress: -2 })
     ], { requires: { school: true } }),
-    event('lost_wallet', 'Bankta unutulmuş cüzdan', 'İçinde kimlik ve ₺1.800 bulunan bir cüzdan buldun. Sahibi yakınlarda görünmüyor.', '👛', 9, 80, [
+    event('lost_wallet', 'Bankta unutulmuş cüzdan', 'İçinde kimlik ve bir miktar para bulunan bir cüzdan buldun. Sahibi yakınlarda görünmüyor.', '👛', 9, 80, [
       choice('Danışmaya teslim et', 'Cüzdan sahibine ulaştı. Doğru şeyi yapmanın huzurunu hissettin.', { happiness: 5, charisma: 2 }),
       choice('Parayı al, cüzdanı bırak', 'Paran arttı ama kararın aklını kurcaladı.', { money: 1800, happiness: -4, stress: 5, flag: 'kept_wallet' })
     ]),
@@ -186,7 +244,7 @@
       choice('Konseri izlemeye git', 'Başkasının sahnesi sana ilham verdi.', { happiness: 4, stress: -2 })
     ], { once: true }),
     event('audition_final', 'Işıklar açılıyor', 'Hazırlandığın seçmede adın okundu. Geçen yılki çalışmalarını şimdi paylaşabilirsin.', '🎤', 0, 110, [
-      choice('Kendi yorumunla çal', 'Gitarını eline alıp sahneye çıktın.', {}, { requires: { items: ['guitar'] }, chance: { stat: 'charisma', target: 42, success: { effects: { charisma: 7, happiness: 9, money: 3500, flag: 'local_performer', meet: 'friend' }, text: 'Dinleyiciler sana eşlik etti. Küçük bir ücretli sahne teklifi aldın.' }, failure: { effects: { charisma: 4, happiness: -2 }, text: 'Heyecandan birkaç nota kaçtı. Yine de ilk sahneni tamamladın.' } } }),
+      choice('Kendi yorumunla çal', 'Gitarını eline alıp sahneye çıktın.', {}, { requires: { items: ['guitar'] }, chance: { stat: 'charisma', target: 42, success: { effects: { charisma: 7, happiness: 9, money: 3500, taxable: true, flag: 'local_performer', meet: 'friend' }, text: 'Dinleyiciler sana eşlik etti. Küçük bir ücretli sahne teklifi aldın.' }, failure: { effects: { charisma: 4, happiness: -2 }, text: 'Heyecandan birkaç nota kaçtı. Yine de ilk sahneni tamamladın.' } } }),
       choice('Bu kez organizasyona yardım et', 'Sahne yerine ekibe katıldın; deneyimin başka türlü büyüdü.', { charisma: 3, happiness: 2, meet: 'friend' })
     ], { triggeredOnly: true, once: true }),
     event('first_crush', 'Konuşmak için bir bahane', 'Etkinlikte hoşuna giden biri var. İkiniz de aynı kitabın standında duruyorsunuz.', '💌', 16, 29, [
@@ -206,10 +264,10 @@
     ], { once: true, requires: { school: true } }),
     event('scholarship_seed', 'Burs başvuru dosyası', 'Bir vakıf, öğrencilerden notlarının yanında kendi hikâyelerini anlatan bir mektup istiyor.', '✉️', 16, 20, [
       choice('Başvuruyu özenle hazırla', 'Mektubunu ve notlarını gönderdin. Yanıt gelecek yıl gelecek.', { knowledge: 3, flag: 'scholarship_application' }, { schedule: { id: 'scholarship_result', after: 1 } }),
-      choice('Bu yıl işe ve birikime odaklan', 'Küçük bir dönemlik işten eğitim için para ayırdın.', { money: 2500, stress: 3 })
+      choice('Bu yıl işe ve birikime odaklan', 'Küçük bir dönemlik işten eğitim için para ayırdın.', { money: 2500, taxable: true, stress: 3 })
     ], { once: true }),
     event('scholarship_result', 'Burs komisyonundan mektup', 'Geçen yıl yaptığın başvurunun değerlendirmesi tamamlandı. Zarfı açıyorsun.', '🎓', 0, 110, [
-      choice('Sonucu öğren', 'Başvurun değerlendirildi.', {}, { chance: { stat: 'knowledge', target: 48, success: { effects: { money: 18000, happiness: 8, flag: 'scholar' }, text: 'Eğitim fonundan tek seferlik ₺18.000 destek kazandın. Bu para eğitim masraflarını hafifletecek.' }, failure: { effects: { happiness: -3, knowledge: 2 }, text: 'Kontenjan sınırlıydı; bu kez destek çıkmadı. Başvuru deneyimi kazandın.' } } }),
+      choice('Sonucu öğren', 'Başvurun değerlendirildi.', {}, { chance: { stat: 'knowledge', target: 48, success: { effects: { money: 18000, happiness: 8, flag: 'scholar' }, text: 'Eğitim fonundan tek seferlik destek kazandın. Bu para eğitim masraflarını hafifletecek.' }, failure: { effects: { happiness: -3, knowledge: 2 }, text: 'Kontenjan sınırlıydı; bu kez destek çıkmadı. Başvuru deneyimi kazandın.' } } }),
       choice('Planını destek olmadan sürdür', 'Sonucun planını durdurmasına izin vermedin.', { stress: -3, knowledge: 2 })
     ], { triggeredOnly: true, once: true }),
     event('driving_offer', 'Direksiyonun başına geçmek', 'Sürücü kursu yeni dönem kayıtlarını açtı. Otomobil sahibi olmadan önce ehliyet gerekiyor.', '🚦', 18, 45, [
@@ -223,7 +281,7 @@
     ], { once: true, requires: { school: true } }),
     event('first_budget', 'Ay sonu hesabı', 'Yetişkin hayatın giderleri düşündüğünden fazla. Defterde küçük harcamalar uzun bir liste olmuş.', '🧾', 18, 26, [
       choice('Harcamalarını tek tek gözden geçir', 'Bazı gereksiz masrafları kestin. Küçük bir tasarruf yaptın.', { money: 1800, knowledge: 3, stress: -3 }),
-      choice('Ek iş kabul et', 'Birkaç hafta sonunu çalışarak geçirip açığı kapattın.', { money: 5000, stress: 7, health: -2 }),
+      choice('Ek iş kabul et', 'Birkaç hafta sonunu çalışarak geçirip açığı kapattın.', { money: 5000, taxable: true, stress: 7, health: -2 }),
       choice('Hesaba bakmayı ertele', 'Rakamlar değişmedi, belirsizlik biraz daha yorucu oldu.', { stress: 5, happiness: -2 })
     ], { once: true }),
     event('roommate_conflict', 'Ortak alanda anlaşmazlık', 'Birlikte kaldığın kişi temizlik ve masraf paylaşımına uymuyor. Birikmiş bir gerginlik var.', '🏠', 18, 35, [
@@ -233,7 +291,7 @@
     ]),
     event('unpaid_internship', 'Ücretsiz staj teklifi', 'Bir kuruluş deneyim vaat ediyor ama ücret ödemiyor. Yol ve yemek masrafı da sana kalacak.', '🪪', 18, 27, [
       choice('Kısa süreli deneyim için kabul et', 'Yeni beceriler öğrendin ve mesleki bir tanışıklık kurdun.', { knowledge: 6, charisma: 2, stress: 4, meet: 'colleague', flag: 'internship' }, { cost: 2200 }),
-      choice('Ücretli görev olup olmadığını sor', 'Sınırlarını açıkça anlattın.', {}, { chance: { stat: 'charisma', target: 42, success: { effects: { money: 4500, knowledge: 4, flag: 'internship' }, text: 'Kısa süreli ücretli bir görev buldular. Deneyim ve ₺4.500 kazandın.' }, failure: { effects: { charisma: 2 }, text: 'Bütçeleri yoktu. Görüşmeyi iyi bir iletişimle kapattın.' } } }),
+      choice('Ücretli görev olup olmadığını sor', 'Sınırlarını açıkça anlattın.', {}, { chance: { stat: 'charisma', target: 42, success: { effects: { money: 4500, taxable: true, knowledge: 4, flag: 'internship' }, text: 'Kısa süreli ücretli bir görev buldular. Deneyim ve emek geliri kazandın.' }, failure: { effects: { charisma: 2 }, text: 'Bütçeleri yoktu. Görüşmeyi iyi bir iletişimle kapattın.' } } }),
       choice('Başka fırsat ara', 'Bütçene uymayan teklifi kibarca geri çevirdin.', { stress: -3, happiness: 1 })
     ], { requires: { job: false } }),
     event('mentor_seed', 'Deneyimli birinin öğle arası', 'İşyerinde deneyimli bir çalışan, gelişmek istediğin konuları konuşmak için zaman ayırabileceğini söyledi.', '☕', 18, 50, [
@@ -242,7 +300,7 @@
       choice('Şimdilik kendi tempona devam et', 'Mevcut görevlerini sakin biçimde tamamladın.', { stress: -3 })
     ], { once: true, requires: { job: true } }),
     event('mentor_project', 'İlk bağımsız sorumluluk', 'Geçen yıl aldığın tavsiyeleri kullanabileceğin bir proje önüne geldi. Kendi kararlarını savunman bekleniyor.', '🗂️', 0, 110, [
-      choice('Projeyi üstlen', 'Hazırlıklarını uygulamaya döktün.', {}, { requires: { job: true }, chance: { stat: 'knowledge', target: 50, success: { effects: { performance: 18, money: 10000, charisma: 3 }, text: 'Proje iyi sonuçlandı. Performansın fark edildi ve ₺10.000 başarı primi aldın.' }, failure: { effects: { performance: 3, knowledge: 5, stress: 6 }, text: 'Takvim sarktı ama hatalarını belgeledin. Önemli bir deneyim kazandın.' } } }),
+      choice('Projeyi üstlen', 'Hazırlıklarını uygulamaya döktün.', {}, { requires: { job: true }, chance: { stat: 'knowledge', target: 50, success: { effects: { performance: 18, money: 10000, taxable: true, charisma: 3 }, text: 'Proje iyi sonuçlandı. Performansın fark edildi ve başarı primi aldın.' }, failure: { effects: { performance: 3, knowledge: 5, stress: 6 }, text: 'Takvim sarktı ama hatalarını belgeledin. Önemli bir deneyim kazandın.' } } }),
       choice('Öğrendiklerini kişisel gelişimine aktar', 'İş koşulları değişse bile kazandığın beceriler sende kaldı.', { knowledge: 5, stress: -2 })
     ], { triggeredOnly: true, once: true }),
     event('work_credit', 'Fikrinin altında başka bir isim', 'Toplantıda önerdiğin fikir, raporda bir başkasına yazılmış. Yöneticin henüz durumu bilmiyor.', '📋', 18, 65, [
@@ -266,7 +324,7 @@
       choice('Mevcut görevlerine odaklan', 'Dedikodudan uzak durup işini sürdürdün.', { performance: 2, stress: 1 })
     ], { requires: { job: true } }),
     event('salary_negotiation', 'Ücret değerlendirmesi', 'Yöneticin bu yılki katkını konuşmak için görüşme açtı. Başarılarını anlatma fırsatın var.', '💼', 20, 64, [
-      choice('Sonuçlarını somut örneklerle anlat', 'Katkını görünür kıldın.', {}, { chance: { stat: 'charisma', target: 45, success: { effects: { money: 12000, performance: 8, happiness: 4 }, text: 'Talebin tek seferlik ₺12.000 başarı primiyle karşılandı.' }, failure: { effects: { performance: 3, charisma: 2 }, text: 'Bu yıl ek bütçe çıkmadı; beklentilerini açıkça ifade ettin.' } } }),
+      choice('Sonuçlarını somut örneklerle anlat', 'Katkını görünür kıldın.', {}, { chance: { stat: 'charisma', target: 45, success: { effects: { money: 12000, taxable: true, performance: 8, happiness: 4 }, text: 'Talebin tek seferlik başarı primiyle karşılandı.' }, failure: { effects: { performance: 3, charisma: 2 }, text: 'Bu yıl ek bütçe çıkmadı; beklentilerini açıkça ifade ettin.' } } }),
       choice('Eğitim desteği iste', 'Yeni beceriler kazanmak için çalışma içinde zaman ayrıldı.', { knowledge: 6, performance: 4 }),
       choice('Geri bildirimi dinle', 'Hangi alanlarda gelişebileceğini öğrendin.', { knowledge: 3, stress: -2 })
     ], { requires: { job: true } }),
@@ -275,13 +333,13 @@
       choice('Yarın için sakin bir buluşma öner', 'Kendi sınırlarını koruyarak destek oldun.', { bond: 5, happiness: 2 }),
       choice('Mesajı yanıtsız bırak', 'Uzaklaşman arkadaşını üzdü.', { bond: -6, stress: 2 })
     ], { npcRole: 'friend', requires: { npcRole: 'friend' } }),
-    event('friend_business_seed', 'Yakın birinin iş fikri', 'Arkadaşın küçük bir iş kurmak istiyor ve ₺8.000 borç istiyor. Geri dönüşü garanti değil.', '💡', 20, 55, [
+    event('friend_business_seed', 'Yakın birinin iş fikri', 'Arkadaşın küçük bir iş kurmak istiyor ve senden borç istiyor. İstenen tutar seçenekte görünüyor; geri dönüşü garanti değil.', '💡', 20, 55, [
       choice('Riskini bilerek borç ver', 'Parayı ve geri ödeme beklentini açıkça konuştun. Gelecek yıl haber bekleyeceksin.', { bond: 5, flag: 'friend_loan' }, { cost: 8000, schedule: { id: 'friend_business_result', after: 1 } }),
       choice('Parayla değil planla yardım et', 'Maliyetlerini birlikte gözden geçirdiniz.', { bond: 4, knowledge: 3 }),
       choice('Bütçene uymadığını söyle', 'Sınırını dürüstçe anlattın. Konu biraz mahcup etti.', { bond: -1, stress: -2 })
     ], { once: true, npcRole: 'friend', requires: { npcRole: 'friend' } }),
     event('friend_business_result', 'Ödünç verdiğin paranın dönüşü', 'Geçen yıl destek olduğun işin ilk hesapları kapandı. Arkadaşın seninle konuşmak istiyor.', '🧾', 0, 110, [
-      choice('Hesapları birlikte gözden geçir', 'İşin sonucunu dinledin.', {}, { chance: { stat: 'knowledge', target: 50, success: { effects: { money: 10000, bond: 4, happiness: 4, clearFlag: 'friend_loan' }, text: 'İş tutundu. Arkadaşın borcunu ve küçük bir teşekkür payını, toplam ₺10.000 olarak ödedi.' }, failure: { effects: { money: 3000, bond: -3, happiness: -3, clearFlag: 'friend_loan' }, text: 'İş bekleneni vermedi. Yalnızca ₺3.000 geri alabildin; kalan parayı kaybettin.' } } }),
+      choice('Hesapları birlikte gözden geçir', 'İşin sonucunu dinledin.', {}, { chance: { stat: 'knowledge', target: 50, success: { effects: { money: 10000, bond: 4, happiness: 4, clearFlag: 'friend_loan' }, text: 'İş tutundu. Arkadaşın borcunu küçük bir teşekkür payıyla birlikte ödedi.' }, failure: { effects: { money: 3000, bond: -3, happiness: -3, clearFlag: 'friend_loan' }, text: 'İş bekleneni vermedi. Paranın yalnızca bir bölümünü geri alabildin; kalan kısmını kaybettin.' } } }),
       choice('Geri ödemeden vazgeç', 'Parayı destek olarak bıraktın. Cömertliğin bütçene mal oldu.', { bond: 9, happiness: 2, clearFlag: 'friend_loan' })
     ], { triggeredOnly: true, once: true, npcRole: 'friend' }),
     event('partner_plans', 'Aynı hafta sonu, iki plan', 'Partnerin birlikte zaman bekliyor; sen ise kendi planına söz verdin. İkiniz de anlaşılmak istiyorsunuz.', '💞', 18, 90, [
@@ -314,23 +372,23 @@
       choice('Sürpriz ziyaret yap', 'Birlikte sofraya oturmak ikinize de iyi geldi.', { bond: 10, happiness: 5 }, { cost: 1200 }),
       choice('Yoğun olduğunu söyle', 'Anlayışla karşıladılar ama görüşme yine ertelendi.', { bond: -3, stress: 1 })
     ], { npcRole: 'parent' }),
-    event('unexpected_bill', 'Hesaba katılmayan fatura', 'Bir tamir ve birikmiş küçük giderler aynı haftaya denk geldi. ₺3.000 ek masraf çıktı.', '🧾', 18, 90, [
+    event('unexpected_bill', 'Hesaba katılmayan fatura', 'Bir tamir ve birikmiş küçük giderler aynı haftaya denk geldi. Hesapta olmayan bir masraf çıktı.', '🧾', 18, 90, [
       choice('Faturayı hemen öde', 'Beklenmedik gideri kapattın; en azından belirsizlik bitti.', { stress: -2 }, { cost: 3000 }),
-      choice('Taksit ve indirim için görüş', 'Gideri azaltmak için uğraştın.', {}, { chance: { stat: 'charisma', target: 38, success: { effects: { money: -1800, stress: 2 }, text: 'İndirim aldın; ₺1.800 ödeme yapıldı. Bakiyen yetmezse fark borca yansır.' }, failure: { effects: { money: -3300, stress: 5 }, text: 'Gecikme gideriyle ₺3.300 ödedin. Bakiyen yetmezse fark borca yansır.' } } }),
+      choice('Taksit ve indirim için görüş', 'Gideri azaltmak için uğraştın.', {}, { chance: { stat: 'charisma', target: 38, success: { effects: { money: -1800, stress: 2 }, text: 'İndirim aldın ve daha az ödeme yaptın. Bakiyen yetmezse fark borca yansır.' }, failure: { effects: { money: -3300, stress: 5 }, text: 'Gecikme gideri yüzünden fatura büyüdü. Bakiyen yetmezse fark borca yansır.' } } }),
       choice('Ödemeyi sonraya bırak', 'Fatura gecikme bedeliyle bütçene işlendi; yetmeyen kısım borca dönüştü.', { money: -3600, stress: 6 })
     ]),
-    event('too_good_offer', 'Garantili kazanç vaadi', 'Bir tanıdık, hiç risk taşımadığını söylediği bir yatırıma ₺6.000 koymanı istiyor. Belgeler belirsiz.', '⚠️', 18, 80, [
+    event('too_good_offer', 'Garantili kazanç vaadi', 'Bir tanıdık, hiç risk taşımadığını söylediği bir yatırıma para koymanı istiyor. Belgeler belirsiz.', '⚠️', 18, 80, [
       choice('Belgeleri inceleyip vazgeç', 'Şeffaf olmayan tekliften uzak durdun.', { knowledge: 3, stress: -2 }),
       choice('Kaybetmeyi göze alarak katıl', 'Söz verilen ödeme gelmedi. Paranı geri alamadın.', { happiness: -7, stress: 9, flag: 'scam_lesson' }, { cost: 6000 }),
       choice('Güvendiğin birine danış', 'İkinci bir bakış, kaçırdığın işaretleri görmeni sağladı.', { knowledge: 2, charisma: 2 })
     ], { once: true }),
     event('secondhand_deal', 'İkinci el bilgisayar', 'Bir tanıdığın çalışır durumdaki bilgisayarını piyasanın altında satıyor. Pilinin ömrü kısa ama iş görüyor.', '💻', 14, 60, [
-      choice('₺12.000 verip satın al', 'Bilgisayarın yeni öğrenme ve çalışma seçenekleri açtı.', { items: ['laptop'], knowledge: 2 }, { cost: 12000 }),
+      choice('İstenen ücreti ödeyip satın al', 'Bilgisayarın yeni öğrenme ve çalışma seçenekleri açtı.', { items: ['laptop'], knowledge: 2 }, { cost: 12000 }),
       choice('İhtiyacın için birikmeye devam et', 'Bütçeni zorlamadın; başka bir fırsatı bekleyeceksin.', { stress: -2 })
     ], { once: true }),
     event('debt_pressure', 'Borçların masadaki ağırlığı', 'Ödeme takvimi zihnini meşgul ediyor. Bugün küçük de olsa bir adım atabilirsin.', '📉', 18, 95, [
       choice('Bütçe danışmanlığından destek al', 'Borç takvimini görünür hâle getirdin. Belirsizlik azaldı.', { knowledge: 4, stress: -7 }),
-      choice('Kısa süreli ek gelir yarat', 'Yorucu birkaç hafta ₺4.000 kazandırdı.', { money: 4000, stress: 5, health: -2 }),
+      choice('Kısa süreli ek gelir yarat', 'Yorucu birkaç hafta bütçene bir miktar emek geliri ekledi.', { money: 4000, taxable: true, stress: 5, health: -2 }),
       choice('Hesapları kapatıp düşünmemeye çalış', 'Rakamlar aynı kaldı; kaçınmak rahatlatmadı.', { stress: 6, happiness: -3 })
     ], { requires: { debtAbove: 10000 } }),
     event('neighbour_exchange', 'Mahallede takas günü', 'Komşular kullanmadıkları eşyaları getiriyor. Para harcamadan yeni bir şey öğrenme fırsatı var.', '♻️', 8, 95, [
@@ -341,7 +399,7 @@
     event('car_repair', 'Gösterge panelindeki uyarı', 'Otomobilinin motor ışığı yandı. Kullanmayı sürdürmeden bir kontrol gerekiyor.', '🚗', 18, 95, [
       choice('Serviste kontrol ettir', 'Sorun büyümeden onarıldı.', { stress: -3 }, { cost: 6500 }),
       choice('Ulaşımı toplu taşımayla sürdür', 'Tamiri erteledin; bu yıl aracı zorlamamaya karar verdin.', { stress: 3, happiness: -2 }),
-      choice('Sorunu görmezden gel', 'Küçük arıza büyüyünce ₺11.000 masraf çıktı; yetmeyen tutar borca yansıdı.', { money: -11000, stress: 6 })
+      choice('Sorunu görmezden gel', 'Küçük arıza büyüyünce masraf arttı; yetmeyen tutar borca yansıdı.', { money: -11000, stress: 6 })
     ], { requires: { items: ['car'] } }),
     event('seasonal_flu', 'Dinlenmeni isteyen bedenin', 'Boğazın ağrıyor, enerjin düşük. Günün planlarıyla dinlenme ihtiyacı çakıştı.', '🤒', 4, 95, [
       choice('Evde dinlen ve kendini izle', 'Programını hafiflettin. Birkaç zor günün ardından toparlandın.', { health: -2, stress: -3, happiness: -1 }),
