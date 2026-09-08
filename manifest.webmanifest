@@ -1,0 +1,18 @@
+{
+  "id": "./",
+  "name": "Bir Ömür · Yaşam Simülatörü",
+  "short_name": "Bir Ömür",
+  "description": "Küçük kararlar, koca bir hayat. Türkçe yaşam simülatörü.",
+  "lang": "tr",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f4f1e9",
+  "theme_color": "#f4f1e9",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {"src":"icons/icon-192.png","sizes":"192x192","type":"image/png","purpose":"any"},
+    {"src":"icons/icon-512.png","sizes":"512x512","type":"image/png","purpose":"any"},
+    {"src":"icons/icon-maskable.png","sizes":"512x512","type":"image/png","purpose":"maskable"}
+  ]
+}
