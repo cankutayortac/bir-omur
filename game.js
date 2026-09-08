@@ -26,6 +26,8 @@
   };
   const icon = (id) => '<svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="'+(paths[id]||paths.star)+'"/></svg>';
   let state = null, tab = 'life', category = 'all', assetTab = 'shop', peopleFilter = 'all', journalLimit = 12, result = '', toastTimer, storageOK = true;
+  let lastStatChanges = {}, seenEventKey = '', dialogReturnFocus = null, skipDialogFocus = false;
+  const dockObserver = typeof ResizeObserver === 'function' ? new ResizeObserver(updateDockSize) : null;
   const KEY = 'birOmur.v3';
   let notice = '';
   function load() {
@@ -46,16 +48,21 @@
   }
   function toast(text) {
     clearTimeout(toastTimer); const el = $('#toast'); el.textContent = text; el.classList.add('visible');
+    if ($('#dialog').open && $('#dialogFeedback')) $('#dialogFeedback').textContent = text;
     toastTimer = setTimeout(() => el.classList.remove('visible'), 4300);
   }
   function dispatch(type, payload = {}) {
     try {
+      const before = {...state.stats};
       const response = E.act(state, type, payload);
       if (!response.ok) { toast(response.message || 'Bu işlem şu an yapılamıyor.'); return response; }
+      lastStatChanges = Object.fromEntries(Object.keys(state.stats).map(k => [k, Math.round(state.stats[k]) - Math.round(before[k])]).filter(([,v]) => v));
       if (type === 'choice' || type === 'activity' || type === 'social') result = response.message || '';
       if (type === 'age') { tab = 'life'; result = ''; }
+      if (type === 'choice') closeDialog(false);
       save(); render();
-      if (response.message) toast(response.message);
+      $('#statFeedback').textContent = Object.entries(lastStatChanges).map(([k,v]) => statNames[k]+' '+Math.abs(v)+(v>0?' arttı':' azaldı')+', şimdi '+num(state.stats[k])).join('. ');
+      if (response.message && !(type === 'age' && state.pending)) toast(response.message);
       return response;
     } catch (error) { console.error(error); toast('İşlem tamamlanamadı; kaydın korunuyor.'); return {ok:false}; }
   }
@@ -71,8 +78,8 @@
     return header()+'<main class="welcome"><div class="welcome-copy"><span class="eyebrow">YAŞAM SİMÜLATÖRÜ · BİR ÖMÜR</span><h1>Küçük kararlar.<br><em>Koca bir hayat.</em></h1><p class="lead">Nereye doğacağını seçemezsin. Ama kim olacağına giden yolda her yıl yeni bir sayfa açabilirsin.</p><div class="welcome-points"><span>'+icon('people')+'Gerçek bağlar</span><span>'+icon('compass')+'Farklı yollar</span><span>'+icon('book')+'Kalıcı izler</span></div><form id="newLifeForm" class="welcome-form"><div class="form-grid"><div><label class="input-label" for="nameInput">Hikâyenin kahramanı</label><input id="nameInput" name="name" placeholder="Adın" maxlength="24" value="Deniz" required autocomplete="off"></div><div><label class="input-label" for="genderInput">Karakter</label><select id="genderInput" name="gender"><option value="random">Rastgele görünüm</option><option value="female">Kadın</option><option value="male">Erkek</option></select></div></div><button class="button primary" type="submit">İlk sayfayı aç '+icon('arrow')+'</button><small>Ailen, imkânların ve doğuştan gelen özelliklerin rastgele belirlenir. Her hayat doğumla başlar.</small></form>'+(notice?'<div class="onboard-summary">'+esc(notice)+'</div>':'')+'</div><div class="welcome-art" aria-hidden="true"><div class="art-orbit"></div><div class="art-disc"></div><span class="art-spark">✳</span><div class="art-avatar">'+avatar(person)+'</div><div class="floating-note note-a"><b>İlk arkadaşınla tanıştın.</b><small>6 yaş · Birlikte büyümek güzel.</small></div><div class="floating-note note-b"><b>Hayalin için bir adım daha.</b><small>18 yaş · Yeni başlangıçlar.</small></div><div class="floating-note note-c"><b>♡ Mutluluk +8</b><small>Bazen tek bir an yeter.</small></div></div></main>';
   }
   function energyPanel() {
-    const energy=state.year.energy, max=state.year.maxEnergy, disabled=!state.alive||!!state.pending;
-    return '<div class="energy-panel"><div class="row between"><h3>Bu yıl sana ait.</h3><span style="font-size:11px">'+energy+' / '+max+'</span></div><div class="energy-pips">'+Array.from({length:max},(_,i)=>'<i class="'+(i<energy?'filled':'')+'"></i>').join('')+'</div><p>'+(state.alive?(state.pending?'Önce hayatındaki olaya bir karşılık ver.':'Zamanını öğrenmeye, ilişkilerine veya kendine ayır.'):'Hikâyenin son sayfasına geldin.')+'</p><button class="age-button" data-do="age" '+(disabled?'disabled':'')+'><span>Bir yıl ilerle</span>'+icon('arrow')+'</button></div>';
+    const energy=state.year.energy, max=state.year.maxEnergy, disabled=!state.alive;
+    return '<div class="energy-panel"><div class="row between"><h3>Bu yıl sana ait.</h3><span style="font-size:11px">'+energy+' / '+max+'</span></div><div class="energy-pips">'+Array.from({length:max},(_,i)=>'<i class="'+(i<energy?'filled':'')+'"></i>').join('')+'</div><p>'+(state.alive?(state.pending?'Önce hayatındaki olaya bir karşılık ver.':'Zamanını öğrenmeye, ilişkilerine veya kendine ayır.'):'Hikâyenin son sayfasına geldin.')+'</p><button class="age-button" data-do="'+(state.pending?'showEvent':'age')+'" '+(disabled?'disabled':'')+'><span>'+(state.pending?'Olayı aç':'Bir yıl ilerle')+'</span>'+icon('arrow')+'</button></div>';
   }
   function profile() {
     return '<section class="card profile-card"><div class="portrait-scene"><span class="pill stage-tag">'+esc(stageName())+'</span>'+avatar(state)+'<button class="edit-avatar" data-do="appearance" aria-label="Görünümünü düzenle">'+icon('edit')+'</button></div><div class="identity"><h2>'+esc(state.name)+'</h2><p class="location">'+esc(state.city||'Türkiye')+' · '+esc(state.family.standard||'Bir aile hikâyesi')+'</p><p class="age-line"><strong>'+state.age+' yaşında</strong> <span class="muted">/ '+esc(occupation())+'</span></p><div class="wallet-line"><span class="label">Birikimin</span><strong>'+money(state.money)+'</strong></div></div></section>';
@@ -96,7 +103,19 @@
   }
   function heading(title,description,kicker='HAYAT DEFTERİN') {return '<header class="page-heading"><div><p class="eyebrow">'+kicker+'</p><h1>'+title+'</h1><p>'+description+'</p></div><span class="pill"><i class="dot"></i>'+state.age+'. YIL</span></header>';}
   function section(title,sub='',right='') {return '<div class="section-title"><div><h2>'+title+'</h2>'+(sub?'<p>'+sub+'</p>':'')+'</div>'+right+'</div>';}
-  function stats() {return '<section class="stats-grid" aria-label="Karakter özellikleri">'+Object.keys(state.stats).filter(k=>statNames[k]).map(k=>'<div class="stat" data-stat="'+k+'"><div class="stat-header"><span>'+statNames[k]+'</span><b>'+num(state.stats[k])+'</b></div><div class="meter"><i style="width:'+Math.max(0,Math.min(100,state.stats[k]))+'%"></i></div></div>').join('')+'</section>';}
+  function stats() {
+    return '<section class="stats-grid compact-stats" aria-label="Karakter özellikleri">'+['health','happiness','knowledge','strength','charisma','stress'].map(k=>{
+      const value=Math.max(0,Math.min(100,Math.round(state.stats[k]))), change=lastStatChanges[k]||0;
+      const good=k==='stress'?change<0:change>0;
+      return '<div class="stat" data-stat="'+k+'" title="'+statNames[k]+': '+value+' / 100'+(k==='stress'?'. Düşük stres daha iyidir.':'')+'"><div class="stat-header"><span>'+statNames[k]+'</span><span class="stat-value"><b>'+value+'</b>'+(change?'<small class="stat-delta '+(good?'positive':'negative')+'" aria-label="Son eylem: '+Math.abs(change)+(change>0?' artış':' azalış')+'">'+(change>0?'+':'')+change+'</small>':'')+'</span></div><div class="meter" role="progressbar" aria-label="'+statNames[k]+'" aria-valuemin="0" aria-valuemax="100" aria-valuenow="'+value+'"><i style="width:'+value+'%"></i></div></div>';
+    }).join('')+'</section>';
+  }
+  function statusContext() {return '<div class="status-context"><span>GÜNCEL DURUMUN'+(Object.keys(lastStatChanges).length?' <small>· Son eylem ±</small>':'')+'</span><span>'+state.age+' yaş <b>'+money(state.money)+'</b></span></div>';}
+  function statusDock() {return '<aside class="status-dock" aria-label="Güncel durumun"><div class="status-inner">'+statusContext()+stats()+'</div></aside>';}
+  function updateDockSize() {
+    const dock=$('.status-dock');
+    if(dock)document.documentElement.style.setProperty('--status-height',Math.ceil(dock.getBoundingClientRect().height)+'px');
+  }
   function effectsText(e={}) {
     const entries=Object.entries(e.stats||{}).concat(Object.entries(e).filter(([k,v])=>statNames[k]&&typeof v==='number'));
     const parts=entries.map(([k,v])=>(v>0?'+':'')+v+' '+statNames[k]);
@@ -124,9 +143,8 @@
   }
   function life() {
     let title=state.age<6?'Her şey yeni.':state.age<18?'Kendi yolunu buluyorsun.':state.age<40?'Hayat, seçimlerinle büyüyor.':state.age<65?'Biriktirdiğin bir hayat var.':'Her hatıranın bir yeri var.';
-    return heading('Hikâyen devam ediyor.','Bugün seçtiklerin, yarının hatıraları.')+(notice?'<div class="warning" style="margin-bottom:16px">'+esc(notice)+'</div>':'')+(!state.alive?deathSummary():'<section class="year-card"><div class="year-number">'+state.age+'<small>YAŞINDASIN</small></div><div><h2>'+title+'</h2><p>'+esc(nextGoal().text)+'</p></div><span class="spark" aria-hidden="true">✳</span></section>')+stats()+
+    return heading('Hikâyen devam ediyor.','Bugün seçtiklerin, yarının hatıraları.')+(notice?'<div class="warning" style="margin-bottom:16px">'+esc(notice)+'</div>':'')+(!state.alive?deathSummary():'<section class="year-card"><div class="year-number">'+state.age+'<small>YAŞINDASIN</small></div><div><h2>'+title+'</h2><p>'+esc(nextGoal().text)+'</p></div><span class="spark" aria-hidden="true">✳</span></section>')+
       (result?'<div class="result-box" style="margin-top:18px"><p class="eyebrow">KARARININ ARDINDAN</p>'+esc(result)+'</div>':'')+
-      (state.pending?section('Hayatın kapını çalıyor.','Dur, düşün, bir yol seç.')+pendingEvent():'')+
       (state.alive&&!state.pending?section('Kendine bir şey kat.','Bu yıl küçük bir adım at.', '<button class="text-link" data-tab="activities">Tüm aktiviteler →</button>')+'<div class="activity-grid">'+D.actions.filter(a=>state.age>=(a.minAge||0)&&state.age<=(a.maxAge??120)).sort((a,b)=>Number(!!E.actionReason(state,a))-Number(!!E.actionReason(state,b))).slice(0,4).map(activityCard).join('')+'</div>':'')+
       section('Sayfa sayfa, sen.','Büyük dönüm noktaları ve küçük hatıralar.','<span class="badge-count">'+state.log.length+' AN</span>')+journal();
   }
@@ -177,15 +195,46 @@
     return '<section class="card death-card">'+avatar(state)+'<p class="eyebrow" style="margin-top:17px">BİR HAYATIN ARDINDAN</p><h2>'+esc(state.name)+' · '+state.age+' yıl</h2><p>'+esc(state.deathCause||'Bir ömür hatıralara dönüştü.')+'</p><div class="metrics"><div class="metric"><span class="label">Hatıra</span><strong>'+state.log.length+'</strong></div><div class="metric"><span class="label">Tanışılan kişi</span><strong>'+state.npcs.length+'</strong></div><div class="metric"><span class="label">Dönüm noktası</span><strong>'+state.milestones.length+'</strong></div></div><button class="button primary" data-do="newLife">Yeni bir hikâyeye başla '+icon('arrow')+'</button><button class="text-link" data-do="export">Bu hayatı sakla</button></section>';
   }
   function render() {
-    if (!state) {$('#app').innerHTML=welcome();return;}
+    dockObserver?.disconnect();
+    if (!state) {seenEventKey='';lastStatChanges={};$('#app').innerHTML=welcome();return;}
     const content={life,activities,people,future,assets,health}[tab];
-    $('#app').innerHTML=header()+'<div class="workspace"><aside class="left-column">'+profile()+navigation()+'<div class="left-energy">'+energyPanel()+'</div><p class="side-caption">Geleceğin henüz yazılmadı.<br>Bir sonraki satır sana ait.</p></aside><main id="mainContent" class="main-column">'+(state.pending&&tab!=='life'?'<div class="pending-banner">'+icon('info')+'Bir karar seni bekliyor.<button class="button small" data-tab="life">Olaya dön</button></div>':'')+content()+'</main>'+sidebar()+'</div>'+navigation(true)+'<div class="mobile-advance"><span class="energy-mini">'+icon('energy')+'<b>'+state.year.energy+'/'+state.year.maxEnergy+'</b> zaman</span><button class="age-button" data-do="age" '+(!state.alive||state.pending?'disabled':'')+'><span>'+(state.pending?'Kararını ver':'Bir yıl ilerle')+'</span>'+icon('arrow')+'</button></div>';
+    $('#app').innerHTML=header()+statusDock()+'<div class="workspace"><aside class="left-column">'+profile()+navigation()+'<div class="left-energy">'+energyPanel()+'</div><p class="side-caption">Geleceğin henüz yazılmadı.<br>Bir sonraki satır sana ait.</p></aside><main id="mainContent" class="main-column" tabindex="-1">'+(state.pending?'<div class="pending-banner">'+icon('info')+'Bir karar seni bekliyor.<button class="button small" data-do="showEvent">Olaya dön</button></div>':'')+content()+'</main>'+sidebar()+'</div>'+navigation(true)+'<div class="mobile-advance"><span class="energy-mini">'+icon('energy')+'<b>'+state.year.energy+'/'+state.year.maxEnergy+'</b> zaman</span><button class="age-button" data-do="'+(state.pending?'showEvent':'age')+'" '+(!state.alive?'disabled':'')+'><span>'+(state.pending?'Olayı aç':'Bir yıl ilerle')+'</span>'+icon('arrow')+'</button></div>';
+    updateDockSize();
+    if($('.status-dock'))dockObserver?.observe($('.status-dock'));
+    const eventKey=state.alive&&state.pending?state.age+':'+state.pending.id+':'+(state.pending.npcId||''):'';
+    if(eventKey&&eventKey!==seenEventKey){seenEventKey=eventKey;showEvent();}
+    if(!eventKey)seenEventKey='';
   }
-  function dialog(title,body) {
-    $('#dialogContent').innerHTML='<header class="dialog-header"><h2 id="dialogTitle">'+esc(title)+'</h2><button class="icon-button" data-do="closeDialog" aria-label="Kapat">'+icon('close')+'</button></header><div class="dialog-body">'+body+'</div>';
-    if(!$('#dialog').open)$('#dialog').showModal();
+  function dialog(title,body,options={}) {
+    const el=$('#dialog'), active=document.activeElement, same=el.open&&el.dataset.title===title;
+    const previousScroll=same?($('.dialog-body')?.scrollTop||0):0;
+    if(!el.open)dialogReturnFocus=active;
+    el.dataset.kind=options.kind||'general';el.dataset.title=title;
+    $('#dialogContent').innerHTML='<header class="dialog-header"><div class="dialog-heading"><h2 id="dialogTitle" tabindex="-1">'+esc(title)+'</h2><button class="icon-button" data-do="closeDialog" aria-label="Kapat">'+icon('close')+'</button></div>'+(state?'<div class="dialog-stats">'+statusContext()+stats()+'</div>':'')+'</header><p id="dialogFeedback" class="dialog-feedback" role="status" aria-live="polite">'+esc(options.feedback||'')+'</p><div class="dialog-body">'+body+'</div>';
+    document.body.classList.add('dialog-open');
+    if(!el.open)el.showModal();
+    const focusKey=active?.dataset?.social?'social':active?.dataset?.appearance?'appearance':null;
+    const replacement=same&&focusKey?[...el.querySelectorAll('button')].find(b=>b.dataset[focusKey]===active.dataset[focusKey]&&b.dataset.id===active.dataset.id&&b.dataset.value===active.dataset.value&&!b.disabled):null;
+    (replacement||$('#dialogTitle')).focus({preventScroll:true});
+    $('.dialog-body').scrollTop=previousScroll;
   }
-  function closeDialog() { $('#dialog').close(); }
+  function restoreDialogFocus() {
+    if($('#dialog').open)return;
+    document.body.classList.remove('dialog-open');
+    const target=dialogReturnFocus?.isConnected?dialogReturnFocus:$('#mainContent');
+    if(!skipDialogFocus)target?.focus({preventScroll:true});
+    dialogReturnFocus=null;skipDialogFocus=false;
+  }
+  function closeDialog(restoreFocus=true) {
+    skipDialogFocus=!restoreFocus;
+    $('#dialog').close();
+    document.body.classList.remove('dialog-open');
+  }
+  $('#dialog').addEventListener('close',restoreDialogFocus);
+  function showEvent() {
+    if(!state?.alive||!state.pending)return;
+    dialog(state.age+' yaş · Bir karar anı',pendingEvent()+'<p class="helper-text event-reminder">Pencereyi kapatıp durumunu inceleyebilirsin. Kararın, “Olayı aç” düğmesinde seni bekler; seçim yapmadan yeni bir yıla geçilmez.</p>',{kind:'event'});
+  }
   function settings() {
     const archive=readArchive(), pwa=globalThis.LifePWA?.status()||{};
     dialog('Hayat defterin','<button class="event-choice" data-do="install">'+icon('download')+'<span><b>Telefonuna uygulama olarak ekle</b><small>'+(pwa.offlineReady?'Çevrimdışı oynamaya hazır.':'İlk açılışta internet bağlantısı gerekir.')+'</small></span></button>'+(pwa.updateReady?'<button class="button primary" data-do="updateApp" style="margin-top:12px">Yeni sürümü yükle</button>':'')+'<div class="divider"></div><p>Bu hayat yalnızca bu tarayıcıda saklanır. Başka bir cihaza geçerken kayıt dosyanı yanına al.</p><div class="detail-list">'+
@@ -211,13 +260,13 @@
     const a=state.appearance;
     dialog('Kendin gibi görün.','<div class="avatar-editor">'+avatar(state)+'</div><label class="input-label">Saç modeli</label><div class="option-row">'+[['short','Kısa'],['wave','Dalgalı'],['long','Uzun'],['buzz','Üç numara'],['bald','Saçsız']].map(([k,v])=>'<button class="option-button '+(a.hair===k?'selected':'')+'" data-appearance="hair" data-value="'+k+'">'+v+'</button>').join('')+'</div><label class="input-label">Saç rengi</label><div class="option-row">'+['#302722','#62452e','#ba8a47','#aa593d','#817970'].map(v=>'<button class="swatch '+(a.color===v?'selected':'')+'" style="background:'+v+'" data-appearance="color" data-value="'+v+'" aria-label="'+v+' saç rengi"></button>').join('')+'</div><label class="input-label">Sakal</label><div class="option-row">'+[['none','Sakalsız'],['stubble','Kirli sakal'],['full','Tam sakal']].map(([k,v])=>'<button class="option-button '+(a.beard===k?'selected':'')+'" data-appearance="beard" data-value="'+k+'" '+(state.age<16&&k!=='none'?'disabled':'')+'>'+v+'</button>').join('')+'</div>'+(state.age<16?'<p class="helper-text">Sakal seçenekleri 16 yaşında açılır.</p>':''));
   }
-  function person(id) {
+  function person(id,feedback='') {
     const p=state.npcs.find(p=>p.id===id);if(!p)return;
     const interactions=[['ask','Ailenden destek iste','Ailenin imkânı ve aranızdaki bağ sonucu etkiler.'],['apologize','Gönlünü al','Kırgınlıkları konuşmak için bir adım at.'],['argue','Rahatsızlığını dile getir','Anlaşmazlık ilişkinizi zorlayabilir.'],['talk','Sohbet et','Birbirini daha iyi tanı.'],['time','Birlikte vakit geçir','Ortak bir hatıra biriktir.'],['gift','Hediye ver','Düşünceli bir jest.'],['flirt','Bir buluşma teklif et','Karşılıklı ilgi ve bağ önemlidir.'],['marry','Evlenme teklif et','Hayatlarınızı birleştirin.'],['child','Aileyi büyüt','Bir çocuğun sorumluluğunu birlikte üstlenin.'],['breakup','İlişkiyi bitir','Bu karar ikinizi de etkiler.']];
     const family=['mother','father','child'].includes(p.role);
     const suitable=interactions.filter(([k])=>k!=='ask'||['mother','father'].includes(p.role)).filter(([k])=>!family||!['flirt','marry','child','breakup'].includes(k)).filter(([k])=>!['flirt','marry','child','breakup'].includes(k)||(p.age>=18&&state.age>=18)).filter(([k])=>k!=='marry'||p.role==='partner').filter(([k])=>k!=='child'||p.role==='spouse').filter(([k])=>k!=='breakup'||['partner','spouse'].includes(p.role)).filter(([k])=>k!=='flirt'||!['partner','spouse'].includes(p.role));
     dialog(p.name,'<div class="dialog-preview"><span class="npc-avatar">'+avatar(p)+'</span><div><h3>'+esc(roleNames[p.role]||p.role)+'</h3><p>'+p.age+' yaş · '+esc(p.personality||'')+'<br>'+esc(p.job||'')+'</p><span class="pill" style="margin-top:8px">Bağınız '+p.bond+' / 100</span></div></div>'+
-      (!p.alive?'<div class="divider"></div><p class="helper-text">Birlikte yaşadıklarınız hayat günlüğünde yaşamaya devam ediyor.</p>':'<p class="helper-text">İlişkilere de zaman gerekir. Aynı etkileşim yılda sınırlı sayıda kullanılabilir.</p><div class="detail-list">'+suitable.map(([k,name,desc])=>{const why=E.socialReason(state,p,k);return '<button class="event-choice" data-social="'+k+'" data-id="'+esc(p.id)+'" '+(why?'disabled':'')+'><span class="grow"><b>'+name+'</b><small>'+esc(why||desc)+'</small></span>'+icon(why?'lock':'chevron')+'</button>';}).join('')+'</div>'));
+      (!p.alive?'<div class="divider"></div><p class="helper-text">Birlikte yaşadıklarınız hayat günlüğünde yaşamaya devam ediyor.</p>':'<p class="helper-text">İlişkilere de zaman gerekir. Aynı etkileşim yılda sınırlı sayıda kullanılabilir.</p><div class="detail-list">'+suitable.map(([k,name,desc])=>{const why=E.socialReason(state,p,k);return '<button class="event-choice" data-social="'+k+'" data-id="'+esc(p.id)+'" '+(why?'disabled':'')+'><span class="grow"><b>'+name+'</b><small>'+esc(why||desc)+'</small></span>'+icon(why?'lock':'chevron')+'</button>';}).join('')+'</div>'),{feedback});
   }
   function exportSave() {
     const file=new Blob([JSON.stringify(state,null,2)],{type:'application/json'}),url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download='bir-omur-'+state.name.replace(/[^a-zA-Z0-9ğüşöçıİĞÜŞÖÇ-]/g,'_')+'-'+state.age+'.json';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);toast('Hayat defterin dosyaya kaydedildi.');
@@ -228,7 +277,7 @@
       if(file.size>5_000_000)throw new Error('Dosya 5 MB sınırını aşıyor.');
       const raw=JSON.parse(await file.text());
       if(!raw||typeof raw!=='object'||Array.isArray(raw)||typeof raw.name!=='string'||!Number.isFinite(raw.age))throw new Error('Bu dosya geçerli bir hayat kaydı değil.');
-      const imported=E.migrate(raw);archiveCurrent();state=imported;result='';notice='Kayıt dosyan yüklendi.';tab='life';save();closeDialog();render();toast('Hayatın kaldığı yerden devam ediyor.');
+      const imported=E.migrate(raw);archiveCurrent();state=imported;result='';lastStatChanges={};seenEventKey='';notice='Kayıt dosyan yüklendi.';tab='life';save();closeDialog();render();toast('Hayatın kaldığı yerden devam ediyor.');
     }catch(error){toast(error.message||'Kayıt dosyası okunamadı.');}finally{e.target.value='';}
   });
   document.addEventListener('submit',e=>{
@@ -245,9 +294,10 @@
     if(b.dataset.peopleFilter){peopleFilter=b.dataset.peopleFilter;render();return;}
     if(b.dataset.assetsTab){assetTab=b.dataset.assetsTab;render();return;}
     if(b.dataset.appearance){if(dispatch('appearance',{key:b.dataset.appearance,value:b.dataset.value}).ok)appearance();return;}
-    if(b.dataset.social){const response=dispatch('social',{id:b.dataset.id,interaction:b.dataset.social});if(response.ok)person(b.dataset.id);return;}
+    if(b.dataset.social){const response=dispatch('social',{id:b.dataset.id,interaction:b.dataset.social});if(response.ok)person(b.dataset.id,response.message);return;}
     const action=b.dataset.do,id=b.dataset.id;
     if(action==='closeDialog')return closeDialog();
+    if(action==='showEvent')return showEvent();
     if(action==='settings')return settings();
     if(action==='install')return installInfo();
     if(action==='installPrompt'){globalThis.LifePWA?.install().then(ok=>{if(!ok)installInfo();});return;}
@@ -258,13 +308,13 @@
     if(action==='import')return $('#importFile').click();
     if(action==='newLife')return newLifePrompt();
     if(action==='confirmNew'){try{archiveCurrent();localStorage.removeItem(KEY);state=null;notice='Önceki hayatın arşive eklendi.';closeDialog();render();}catch(error){toast(error.message);}return;}
-    if(action==='restore'){try{const lives=JSON.parse(localStorage.getItem('birOmur.archive')||'[]'),restored=E.migrate(lives[Number(b.dataset.index)]);archiveCurrent();state=restored;result='';notice='Arşivdeki hayatına döndün.';tab='life';save();closeDialog();render();}catch{toast('Arşiv okunamadı.');}return;}
+    if(action==='restore'){try{const lives=JSON.parse(localStorage.getItem('birOmur.archive')||'[]'),restored=E.migrate(lives[Number(b.dataset.index)]);archiveCurrent();state=restored;result='';lastStatChanges={};seenEventKey='';notice='Arşivdeki hayatına döndün.';tab='life';save();closeDialog();render();}catch{toast('Arşiv okunamadı.');}return;}
     if(action==='moreJournal'){journalLimit+=20;render();return;}
     if(action==='confirmQuit')return dialog('İşinden ayrılmak','<p>Düzenli gelirin sona erecek. Yıllık giderlerin devam ederken birikimine ihtiyaç duyabilirsin.</p><button class="button danger" data-do="quit">İşten ayrıl</button>');
     if(action==='repay')return dialog('Borcunu azalt','<p>Borcun '+money(state.debt)+'. Kullanılabilir birikimin '+money(state.money)+'.</p><div class="row wrap">'+[1000,10000,Math.min(state.money,state.debt)].filter((x,i,a)=>x>0&&x<=state.money&&x<=state.debt&&a.indexOf(x)===i).map(x=>'<button class="button" data-do="payDebt" data-amount="'+x+'">'+money(x)+' öde</button>').join('')+'</div>');
     if(action==='payDebt'){if(dispatch('repay',{amount:Number(b.dataset.amount)}).ok)closeDialog();return;}
-    if(action==='choice'){const response=dispatch('choice',{index:Number(b.dataset.index)});if(response.ok)$('#mainContent')?.scrollIntoView({block:'start',behavior:'smooth'});return;}
-    if(action==='age'){const response=dispatch('age');if(response.ok)$('#mainContent')?.scrollIntoView({block:'start',behavior:'smooth'});return;}
+    if(action==='choice'){const response=dispatch('choice',{index:Number(b.dataset.index)});if(response.ok){$('#mainContent')?.focus({preventScroll:true});$('#mainContent')?.scrollIntoView({block:'start',behavior:'smooth'});}return;}
+    if(action==='age'){const response=dispatch('age');if(response.ok&&!state.pending)$('#mainContent')?.scrollIntoView({block:'start',behavior:'smooth'});return;}
     if(['activity','buy','sell','use','enroll','apply','quit','retire'].includes(action)){const response=dispatch(action,{id});if(response.ok&&['quit','retire'].includes(action))closeDialog();}
   });
   if(!E||!D||!A){$('#app').innerHTML='<main class="welcome"><h1>Hayat defteri yüklenemedi.</h1><p>Sayfayı yenileyip tekrar dene.</p></main>';return;}

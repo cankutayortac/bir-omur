@@ -24,8 +24,12 @@ Türkçe, karar odaklı yaşam simülatörü. Doğumdan itibaren aile koşullar�
 - Sağlık, stres, geçici/kronik hastalık, takip, dinlenme, emeklilik ve ölüm özeti.
 - Yaşla değişen katmanlı SVG karakterler; saç, sakal ve renk seçenekleri.
 - Masaüstü, tablet ve telefon düzeni; cihazda otomatik kayıt, dosya olarak dışa/içe aktarma ve hayat arşivi.
+- Tüm menülerde kaydırırken görünür kalan durum barları; son eylemin puan değişimleri.
+- Yaş ilerleyince otomatik açılan olay penceresi; olay ve ilişki pencerelerinde sabit durum barları, bağımsız kaydırılan seçenekler.
 
 Her yaş ilerletme bir tam yılı hesaplar. Eylemler bu yılın sınırlı zaman puanını kullanır. Olay çözülmeden zaman ilerletilemez; sayfayı yenilemek de kararı atlamaz. Sağlık ve ekonomi kuralları oyun için tasarlanmıştır.
+
+Olay penceresini kapatmak kararı iptal etmez. Menülerde durumunu inceledikten sonra **Olayı aç / Olaya dön** ile devam edebilirsin. Bekleyen olay, kayıt açıldığında tekrar görünür. Barların yanındaki +/− değerler son başarılı eylemin gerçek değişimini gösterir; streste azalma olumludur.
 
 ## Yerel geliştirme
 
@@ -41,7 +45,7 @@ http://localhost:8080 adresini aç. Yerel kayıt, yayın adresindeki kayıttan a
 npm test
 ```
 
-Testler olay ve veri tutarlılığını, kayıt devamlılığını, ekipman/tüketim sınırlarını, tam yıllık bütçeyi, eğitim ve sağlık yollarını, sosyal etkileşim kısıtlarını ve 24 tam yaşamı doğrular.
+Testler olay ve veri tutarlılığını, kayıt devamlılığını, ekipman/tüketim sınırlarını, tam yıllık bütçeyi, eğitim ve sağlık yollarını, sosyal etkileşim kısıtlarını ve 24 tam yaşamı doğrular. Arayüz testleri kalıcı durum barlarını, otomatik olay penceresini, kapatma/yeniden açma akışını, seçim sonrası güncellemeyi ve kayıt içe aktarmayı kontrol eder.
 
 ## Dosyalar
 
@@ -51,6 +55,7 @@ Testler olay ve veri tutarlılığını, kayıt devamlılığını, ekipman/tük
 - `game.js`, `styles.css`, `index.html`: arayüz ve kayıt yönetimi.
 - `manifest.webmanifest`, `sw.js`, `pwa.js`: kurulum, çevrimdışı dosyalar ve güncelleme akışı.
 - `engine.test.js`: oyun kurallarının regresyon testleri.
+- `ui.test.js`: gerçek arayüz koduyla olay penceresi ve durum barı regresyon testleri (görsel yerleşim ayrıca tarayıcıda test edilir).
 
 Kayıtlar tarayıcıda `birOmur.v3` anahtarıyla saklanır. Eski kayıt ilk aktarımda `birOmur.backup-v2` anahtarıyla yedeklenir. Hayat arşivi en son sekiz kaydı tutar; daha eski hayatları dosyaya aktarabilirsin. Kayıtlar sunucuya gönderilmez ve cihazlar arasında kendiliğinden eşitlenmez.
 

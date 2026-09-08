@@ -21,3 +21,78 @@ dialog{border:1px solid var(--line);border-radius:22px;background:var(--paper);c
 @media(prefers-reduced-motion:reduce){*{scroll-behavior:auto!important;transition:none!important}}@media(max-width:360px){.workspace{padding:14px 12px 145px}.welcome{padding:24px 18px}.welcome h1{font-size:40px}.stats-grid .stat{padding:10px}.activity-card{padding:12px}.year-card{padding:15px}.year-card h2{font-size:16px}.brand-name{font-size:19px}}
 .brand{flex:none}.brand-name{white-space:nowrap}.brand-mark{flex:none}.topbar>.row{min-width:0}.metrics .metric strong{overflow-wrap:anywhere}
 @media(max-width:650px){.topbar .save-indicator{display:none}.topbar>.row{gap:8px}.welcome-form input,.welcome-form select,.setting-row select{font-size:16px}.setting-row select{max-width:150px}.option-button{min-height:40px}.text-link{min-height:40px}.identity .age-line{line-height:1.4}.mobile-nav button{font-size:9px}.dialog-body .event-choice small{font-size:11px}.activity-card p,.activity-footer{font-size:11px}}
+
+/* Your current state stays beside every decision, even in the dialog top layer. */
+:root{--status-height:106px;scroll-padding-top:calc(var(--status-height) + 16px);scrollbar-gutter:stable}
+.sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap;border:0}
+.status-dock{position:sticky;top:0;z-index:15;background:#f8f6f0fa;border-bottom:1px solid var(--line);box-shadow:0 5px 20px #263c2a0a;padding:calc(8px + env(safe-area-inset-top)) 40px 10px}
+.status-inner{max-width:1390px;margin:auto}
+.status-context{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:9px;line-height:1.4;color:var(--muted);margin-bottom:7px}
+.status-context>span:first-child{font-weight:700;letter-spacing:.06em}
+.status-context small{font-size:9px;font-weight:400;letter-spacing:0}
+.status-context b{color:var(--ink);font-weight:600;margin-left:9px}
+.compact-stats{grid-template-columns:repeat(6,minmax(0,1fr));border-radius:11px}
+.compact-stats .stat{min-width:0;padding:9px 12px}
+.compact-stats .stat-header{gap:4px;margin-bottom:6px}
+.compact-stats .stat-header span{font-size:10px}
+.compact-stats .stat-header b{font-size:14px;font-variant-numeric:tabular-nums}
+.stat-value{display:flex;align-items:center;gap:4px;flex-shrink:0}
+.stat-delta{font-size:9px;line-height:1.2;font-weight:700;font-variant-numeric:tabular-nums}
+.left-column,.right-column{top:calc(var(--status-height) + 20px)}
+.main-column:focus{outline:none}
+body.dialog-open{overflow:hidden}
+dialog{overflow:hidden;max-height:calc(100dvh - 24px - env(safe-area-inset-top) - env(safe-area-inset-bottom));width:min(580px,calc(100% - 24px));max-width:calc(100% - 24px)}
+#dialogContent{display:flex;flex-direction:column;max-height:calc(100dvh - 28px - env(safe-area-inset-top) - env(safe-area-inset-bottom));min-height:0}
+.dialog-header{display:block;position:static;flex-shrink:0;padding:17px 21px 15px}
+.dialog-heading{display:flex;align-items:center;justify-content:space-between;gap:12px}
+.dialog-heading h2{font-size:20px;overflow-wrap:anywhere}
+.dialog-heading h2:focus{outline:none}
+.dialog-heading .icon-button{flex-shrink:0;min-width:40px;min-height:40px}
+.dialog-stats{margin-top:13px}
+.dialog-stats .compact-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dialog-body{min-height:0;overflow-y:auto;overscroll-behavior:contain;padding:20px 21px;scrollbar-gutter:stable;scroll-padding-block:16px}
+.dialog-feedback:empty{display:none}
+.dialog-feedback:not(:empty){flex-shrink:0;max-height:18dvh;overflow-y:auto;padding:10px 16px;background:var(--light);border-bottom:1px solid var(--line);color:var(--green);font-size:12px}
+dialog[data-kind=event] .event-card{border-radius:14px}
+dialog[data-kind=event] .event-top{padding:17px;gap:12px}
+dialog[data-kind=event] .event-icon{width:43px;height:43px;border-radius:12px;font-size:23px}
+dialog[data-kind=event] .event-top h2{font-size:20px}
+dialog[data-kind=event] .event-top .eyebrow{font-size:8px;letter-spacing:.1em}
+dialog[data-kind=event] .event-body{padding:17px}
+dialog[data-kind=event] .event-body>p{font-size:13px;margin-bottom:15px}
+dialog[data-kind=event] .event-choice{min-height:48px}
+.event-reminder{margin:14px 0 0!important;font-size:10px!important}
+@media(max-width:1000px){.status-dock{padding-left:24px;padding-right:24px}.compact-stats .stat{padding:9px}.compact-stats .stat-header span{font-size:9px}}
+@media(max-width:650px){
+  :root{--status-height:134px}
+  .status-dock{padding:calc(7px + env(safe-area-inset-top)) 12px 8px}
+  .compact-stats{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .compact-stats .stat{padding:7px 9px}
+  .compact-stats .stat-header{margin-bottom:5px}
+  .compact-stats .stat-header b{font-size:13px}
+  .status-context{font-size:8px;margin-bottom:6px}
+  .status-context small{font-size:8px}
+  .dialog-header{padding:12px}
+  .dialog-heading h2{font-size:18px}
+  .dialog-stats{margin-top:9px}
+  .dialog-body{padding:14px 12px}
+  .dialog-stats .compact-stats .stat{padding:7px}
+  .dialog-stats .stat-value{gap:3px}
+  dialog[data-kind=event] .event-top,dialog[data-kind=event] .event-body{padding:13px}
+  dialog[data-kind=event] .event-top h2{font-size:18px}
+  dialog[data-kind=event] .event-choice{gap:8px;padding:12px 10px}
+  dialog[data-kind=event] .event-choice>.icon{width:16px;height:16px}
+}
+@media(max-height:480px) and (min-width:651px){
+  .dialog-header{padding:9px 16px}
+  .dialog-stats{margin-top:6px}
+  .dialog-stats .compact-stats{grid-template-columns:repeat(6,minmax(0,1fr))}
+  dialog{width:min(740px,calc(100% - 24px))}
+  .dialog-stats .stat{padding:7px}
+  .dialog-stats .stat-header span{font-size:9px}
+}
+@media(max-width:360px){
+  .compact-stats .stat-header{display:block}
+  .compact-stats .stat-value{justify-content:flex-end;margin-top:1px}
+  .status-context>span:last-child{flex-shrink:0}
+}

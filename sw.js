@@ -1,5 +1,5 @@
 'use strict';
-const CACHE = 'bir-omur-v3-20260908-2';
+const CACHE = 'bir-omur-v3-20260908-5';
 const ROOT = new URL('./', self.location.href).href;
 const FILES = ['./','index.html','styles.css','content.js','engine.js','avatar.js','game.js','pwa.js','manifest.webmanifest','icons/icon-192.png','icons/icon-512.png','icons/icon-maskable.png','icons/apple-touch-icon.png'];
 self.addEventListener('install', event => {
